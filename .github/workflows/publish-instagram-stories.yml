@@ -1,1 +1,107 @@
-bmFtZTogUHVibGlzaCBJbnN0YWdyYW0gU3RvcmllcwoKb246CiAgcHVzaDoKICAgIHBhdGhzOgogICAgICAtICdzdG9yaWVzLyoqLyouanBnJwogICAgICAtICdzdG9yaWVzLyoqLyoucG5nJwoKam9iczoKICBwdWJsaXNoOgogICAgcnVucy1vbjogdWJ1bnR1LWxhdGVzdAoKICAgIHN0ZXBzOgogICAgICAtIG5hbWU6IENoZWNrb3V0CiAgICAgICAgdXNlczogYWN0aW9ucy9jaGVja291dEB2NAogICAgICAgIHdpdGg6CiAgICAgICAgICBmZXRjaC1kZXB0aDogMgoKICAgICAgLSBuYW1lOiBHZXQgbmV3IHN0b3J5IGltYWdlcwogICAgICAgIGlkOiBjaGFuZ2VkCiAgICAgICAgcnVuOiB8CiAgICAgICAgICBGSUxFUz0kKGdpdCBkaWZmIC0tbmFtZS1vbmx5IEhFQUR+MSBIRUFEIC0tICdzdG9yaWVzLyoqJyB8IGdyZXAgLUUgJ1wuKGpwZ3xwbmcpJCcgfCBzb3J0KQogICAgICAgICAgZWNobyAiZmlsZXM8PEVPRiIgPj4gJEdJVEhVQl9PVVRQVVQKICAgICAgICAgIGVjaG8gIiRGSUxFUyIgPj4gJEdJVEhVQl9PVVRQVVQKICAgICAgICAgIGVjaG8gIkVPRiIgPj4gJEdJVEhVQl9PVVRQVVQKICAgICAgICAgIGVjaG8gIkZvdW5kIGZpbGVzOiAkRklMRVMiCgogICAgICAtIG5hbWU6IFB1Ymxpc2ggdG8gSW5zdGFncmFtCiAgICAgICAgZW52OgogICAgICAgICAgSUdfQUNDRVNTX1RPS0VOOiAke3sgc2VjcmV0cy5JR19BQ0NFU1NfVE9LRU4gfX0KICAgICAgICAgIElHX0lEOiAke3sgc2VjcmV0cy5JR19JRCB9fQogICAgICAgICAgR0lUSFVCX1RPS0VOOiAke3sgc2VjcmV0cy5HSVRIVUJfVE9LRU4gfX0KICAgICAgICAgIFJFUE86ICR7eyBnaXRodWIucmVwb3NpdG9yeSB9fQogICAgICAgICAgQlJBTkNIOiAke3sgZ2l0aHViLnJlZl9uYW1lIH19CiAgICAgICAgICBGSUxFUzogJHt7IHN0ZXBzLmNoYW5nZWQub3V0cHV0cy5maWxlcyB9fQogICAgICAgIHJ1bjogfAogICAgICAgICAgbm9kZSA8PCAnSlNFT0YnCiAgICAgICAgICBjb25zdCBodHRwcyA9IHJlcXVpcmUoJ2h0dHBzJyk7CgogICAgICAgICAgY29uc3QgSUdfSUQgPSBwcm9jZXNzLmVudi5JR19JRDsKICAgICAgICAgIGNvbnN0IFRPS0VOID0gcHJvY2Vzcy5lbnYuSUdfQUNDRVNTX1RPS0VOOwogICAgICAgICAgY29uc3QgUkVQTyA9IHByb2Nlc3MuZW52LlJFUE87CiAgICAgICAgICBjb25zdCBCUkFOQ0ggPSBwcm9jZXNzLmVudi5CUkFOQ0g7CiAgICAgICAgICBjb25zdCBGSUxFUyA9IHByb2Nlc3MuZW52LkZJTEVTLnRyaW0oKS5zcGxpdCgnXG4nKS5maWx0ZXIoZiA9PiBmLmxlbmd0aCA+IDApOwoKICAgICAgICAgIGlmIChGSUxFUy5sZW5ndGggPT09IDApIHsKICAgICAgICAgICAgY29uc29sZS5sb2coJ05vIG5ldyBzdG9yeSBpbWFnZXMgZm91bmQuJyk7CiAgICAgICAgICAgIHByb2Nlc3MuZXhpdCgwKTsKICAgICAgICAgIH0KCiAgICAgICAgICBjb25zb2xlLmxvZyhgUHVibGlzaGluZyAke0ZJTEVTLmxlbmd0aH0gc3RvcmllczogJHtGSUxFUy5qb2luKCcsICcpfWApOwoKICAgICAgICAgIGZ1bmN0aW9uIHNsZWVwKG1zKSB7IHJldHVybiBuZXcgUHJvbWlzZShyID0+IHNldFRpbWVvdXQociwgbXMpKTsgfQoKICAgICAgICAgIGZ1bmN0aW9uIHBvc3QodXJsLCBwYXJhbXMpIHsKICAgICAgICAgICAgcmV0dXJuIG5ldyBQcm9taXNlKChyZXNvbHZlLCByZWplY3QpID0+IHsKICAgICAgICAgICAgICBjb25zdCBib2R5ID0gbmV3IFVSTFNlYXJjaFBhcmFtcyhwYXJhbXMpLnRvU3RyaW5nKCk7CiAgICAgICAgICAgICAgY29uc3QgdSA9IG5ldyBVUkwodXJsKTsKICAgICAgICAgICAgICBjb25zdCByZXEgPSBodHRwcy5yZXF1ZXN0KHsKICAgICAgICAgICAgICAgIGhvc3RuYW1lOiB1Lmhvc3RuYW1lLCBwYXRoOiB1LnBhdGhuYW1lICsgdS5zZWFyY2gsIG1ldGhvZDogJ1BPU1QnLAogICAgICAgICAgICAgICAgaGVhZGVyczogeyAnQ29udGVudC1UeXBlJzogJ2FwcGxpY2F0aW9uL3gtd3d3LWZvcm0tdXJsZW5jb2RlZCcsICdDb250ZW50LUxlbmd0aCc6IEJ1ZmZlci5ieXRlTGVuZ3RoKGJvZHkpIH0KICAgICAgICAgICAgICB9LCByZXMgPT4gewogICAgICAgICAgICAgICAgbGV0IGQgPSAnJzsKICAgICAgICAgICAgICAgIHJlcy5vbignZGF0YScsIGMgPT4gZCArPSBjKTsKICAgICAgICAgICAgICAgIHJlcy5vbignZW5kJywgKCkgPT4gcmVzb2x2ZShKU09OLnBhcnNlKGQpKSk7CiAgICAgICAgICAgICAgfSk7CiAgICAgICAgICAgICAgcmVxLm9uKCdlcnJvcicsIHJlamVjdCk7CiAgICAgICAgICAgICAgcmVxLndyaXRlKGJvZHkpOwogICAgICAgICAgICAgIHJlcS5lbmQoKTsKICAgICAgICAgICAgfSk7CiAgICAgICAgICB9CgogICAgICAgICAgYXN5bmMgZnVuY3Rpb24gbWFpbigpIHsKICAgICAgICAgICAgZm9yIChsZXQgaSA9IDA7IGkgPCBGSUxFUy5sZW5ndGg7IGkrKykgewogICAgICAgICAgICAgIGNvbnN0IGZpbGUgPSBGSUxFU1tpXTsKICAgICAgICAgICAgICBjb25zdCBpbWFnZVVybCA9IGBodHRwczovL2Nkbi5qc2RlbGl2ci5uZXQvZ2gvJHtSRVBPfUAke0JSQU5DSH0vJHtmaWxlfWA7CiAgICAgICAgICAgICAgY29uc29sZS5sb2coYFxuU3RvcnkgJHtpKzF9LyR7RklMRVMubGVuZ3RofTogJHtpbWFnZVVybH1gKTsKCiAgICAgICAgICAgICAgLy8gQ3JlYXRlIGNvbnRhaW5lcgogICAgICAgICAgICAgIGNvbnN0IGNvbnRhaW5lciA9IGF3YWl0IHBvc3QoYGh0dHBzOi8vZ3JhcGguZmFjZWJvb2suY29tL3YyMS4wLyR7SUdfSUR9L21lZGlhYCwgewogICAgICAgICAgICAgICAgaW1hZ2VfdXJsOiBpbWFnZVVybCwKICAgICAgICAgICAgICAgIG1lZGlhX3R5cGU6ICdTVE9SSUVTJywKICAgICAgICAgICAgICAgIGFjY2Vzc190b2tlbjogVE9LRU4KICAgICAgICAgICAgICB9KTsKICAgICAgICAgICAgICBjb25zb2xlLmxvZygnICBDb250YWluZXI6JywgSlNPTi5zdHJpbmdpZnkoY29udGFpbmVyKSk7CgogICAgICAgICAgICAgIGlmICghY29udGFpbmVyLmlkKSB7CiAgICAgICAgICAgICAgICBjb25zb2xlLmVycm9yKCcgIEVSUk9SOiBObyBjb250YWluZXIgSUQgcmV0dXJuZWQnKTsKICAgICAgICAgICAgICAgIGNvbnRpbnVlOwogICAgICAgICAgICAgIH0KCiAgICAgICAgICAgICAgYXdhaXQgc2xlZXAoNDAwMCk7CgogICAgICAgICAgICAgIC8vIFB1Ymxpc2gKICAgICAgICAgICAgICBjb25zdCBwdWIgPSBhd2FpdCBwb3N0KGBodHRwczovL2dyYXBoLmZhY2Vib29rLmNvbS92MjEuMC8ke0lHX0lEfS9tZWRpYV9wdWJsaXNoYCwgewogICAgICAgICAgICAgICAgY3JlYXRpb25faWQ6IGNvbnRhaW5lci5pZCwKICAgICAgICAgICAgICAgIGFjY2Vzc190b2tlbjogVE9LRU4KICAgICAgICAgICAgICB9KTsKICAgICAgICAgICAgICBjb25zb2xlLmxvZygnICBQdWJsaXNoZWQ6JywgSlNPTi5zdHJpbmdpZnkocHViKSk7CgogICAgICAgICAgICAgIGlmIChpIDwgRklMRVMubGVuZ3RoIC0gMSkgYXdhaXQgc2xlZXAoMTUwMDApOwogICAgICAgICAgICB9CiAgICAgICAgICAgIGNvbnNvbGUubG9nKCdcbkRvbmUuJyk7CiAgICAgICAgICB9CgogICAgICAgICAgbWFpbigpLmNhdGNoKGUgPT4geyBjb25zb2xlLmVycm9yKGUpOyBwcm9jZXNzLmV4aXQoMSk7IH0pOwogICAgICAgICAgSlNFT0YK
+name: Publish Instagram Stories
+
+on:
+  push:
+    paths:
+      - 'stories/**/*.jpg'
+      - 'stories/**/*.png'
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+
+      - name: Get new story images
+        id: changed
+        run: |
+          FILES=$(git diff --name-only HEAD~1 HEAD -- 'stories/**' | grep -E '\.(jpg|png)$' | sort)
+          echo "files<<EOF" >> $GITHUB_OUTPUT
+          echo "$FILES" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+          echo "Found files: $FILES"
+
+      - name: Publish to Instagram
+        env:
+          IG_ACCESS_TOKEN: ${{ secrets.IG_ACCESS_TOKEN }}
+          IG_ID: ${{ secrets.IG_ID }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          BRANCH: ${{ github.ref_name }}
+          FILES: ${{ steps.changed.outputs.files }}
+        run: |
+          node << 'JSEOF'
+          const https = require('https');
+
+          const IG_ID = process.env.IG_ID;
+          const TOKEN = process.env.IG_ACCESS_TOKEN;
+          const REPO = process.env.REPO;
+          const BRANCH = process.env.BRANCH;
+          const FILES = process.env.FILES.trim().split('\n').filter(f => f.length > 0);
+
+          if (FILES.length === 0) {
+            console.log('No new story images found.');
+            process.exit(0);
+          }
+
+          console.log(`Publishing ${FILES.length} stories: ${FILES.join(', ')}`);
+
+          function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+
+          function post(url, params) {
+            return new Promise((resolve, reject) => {
+              const body = new URLSearchParams(params).toString();
+              const u = new URL(url);
+              const req = https.request({
+                hostname: u.hostname, path: u.pathname + u.search, method: 'POST',
+                headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'Content-Length': Buffer.byteLength(body) }
+              }, res => {
+                let d = '';
+                res.on('data', c => d += c);
+                res.on('end', () => resolve(JSON.parse(d)));
+              });
+              req.on('error', reject);
+              req.write(body);
+              req.end();
+            });
+          }
+
+          async function main() {
+            for (let i = 0; i < FILES.length; i++) {
+              const file = FILES[i];
+              const imageUrl = `https://cdn.jsdelivr.net/gh/${REPO}@${BRANCH}/${file}`;
+              console.log(`\nStory ${i+1}/${FILES.length}: ${imageUrl}`);
+
+              // Create container
+              const container = await post(`https://graph.facebook.com/v21.0/${IG_ID}/media`, {
+                image_url: imageUrl,
+                media_type: 'STORIES',
+                access_token: TOKEN
+              });
+              console.log('  Container:', JSON.stringify(container));
+
+              if (!container.id) {
+                console.error('  ERROR: No container ID returned');
+                continue;
+              }
+
+              await sleep(4000);
+
+              // Publish
+              const pub = await post(`https://graph.facebook.com/v21.0/${IG_ID}/media_publish`, {
+                creation_id: container.id,
+                access_token: TOKEN
+              });
+              console.log('  Published:', JSON.stringify(pub));
+
+              if (i < FILES.length - 1) await sleep(15000);
+            }
+            console.log('\nDone.');
+          }
+
+          main().catch(e => { console.error(e); process.exit(1); });
+          JSEOF
