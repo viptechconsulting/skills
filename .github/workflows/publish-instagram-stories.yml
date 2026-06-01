@@ -5,6 +5,12 @@ on:
     paths:
       - 'stories/**/*.jpg'
       - 'stories/**/*.png'
+  workflow_dispatch:
+    inputs:
+      stories_folder:
+        description: 'Folder with stories to publish (e.g. stories/lynkro/tiempo-robado)'
+        required: true
+        default: 'stories/lynkro/tiempo-robado'
 
 jobs:
   publish:
@@ -16,10 +22,15 @@ jobs:
         with:
           fetch-depth: 2
 
-      - name: Get new story images
+      - name: Get story images
         id: changed
         run: |
-          FILES=$(git diff --name-only HEAD~1 HEAD -- 'stories/**' | grep -E '\.(jpg|png)$' | sort)
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            FOLDER="${{ github.event.inputs.stories_folder }}"
+            FILES=$(find "$FOLDER" -name "*.jpg" -o -name "*.png" 2>/dev/null | sort)
+          else
+            FILES=$(git diff --name-only HEAD~1 HEAD -- 'stories/**' | grep -E '\.(jpg|png)$' | sort)
+          fi
           echo "files<<EOF" >> $GITHUB_OUTPUT
           echo "$FILES" >> $GITHUB_OUTPUT
           echo "EOF" >> $GITHUB_OUTPUT
@@ -44,7 +55,7 @@ jobs:
           const FILES = process.env.FILES.trim().split('\n').filter(f => f.length > 0);
 
           if (FILES.length === 0) {
-            console.log('No new story images found.');
+            console.log('No story images found.');
             process.exit(0);
           }
 
