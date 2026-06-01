@@ -1,0 +1,107 @@
+name: Publish Instagram Stories
+
+on:
+  push:
+    paths:
+      - 'stories/**/*.jpg'
+      - 'stories/**/*.png'
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+
+      - name: Get new story images
+        id: changed
+        run: |
+          FILES=$(git diff --name-only HEAD~1 HEAD -- 'stories/**' | grep -E '\.(jpg|png)$' | sort)
+          echo "files<<EOF" >> $GITHUB_OUTPUT
+          echo "$FILES" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+          echo "Found files: $FILES"
+
+      - name: Publish to Instagram
+        env:
+          IG_ACCESS_TOKEN: ${{ secrets.IG_ACCESS_TOKEN }}
+          IG_ID: ${{ secrets.IG_ID }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          BRANCH: ${{ github.ref_name }}
+          FILES: ${{ steps.changed.outputs.files }}
+        run: |
+          node << 'JSEOF'
+          const https = require('https');
+
+          const IG_ID = process.env.IG_ID;
+          const TOKEN = process.env.IG_ACCESS_TOKEN;
+          const REPO = process.env.REPO;
+          const BRANCH = process.env.BRANCH;
+          const FILES = process.env.FILES.trim().split('\n').filter(f => f.length > 0);
+
+          if (FILES.length === 0) {
+            console.log('No new story images found.');
+            process.exit(0);
+          }
+
+          console.log(`Publishing ${FILES.length} stories: ${FILES.join(', ')}`);
+
+          function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+
+          function post(url, params) {
+            return new Promise((resolve, reject) => {
+              const body = new URLSearchParams(params).toString();
+              const u = new URL(url);
+              const req = https.request({
+                hostname: u.hostname, path: u.pathname + u.search, method: 'POST',
+                headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'Content-Length': Buffer.byteLength(body) }
+              }, res => {
+                let d = '';
+                res.on('data', c => d += c);
+                res.on('end', () => resolve(JSON.parse(d)));
+              });
+              req.on('error', reject);
+              req.write(body);
+              req.end();
+            });
+          }
+
+          async function main() {
+            for (let i = 0; i < FILES.length; i++) {
+              const file = FILES[i];
+              const imageUrl = `https://cdn.jsdelivr.net/gh/${REPO}@${BRANCH}/${file}`;
+              console.log(`\nStory ${i+1}/${FILES.length}: ${imageUrl}`);
+
+              // Create container
+              const container = await post(`https://graph.facebook.com/v21.0/${IG_ID}/media`, {
+                image_url: imageUrl,
+                media_type: 'STORIES',
+                access_token: TOKEN
+              });
+              console.log('  Container:', JSON.stringify(container));
+
+              if (!container.id) {
+                console.error('  ERROR: No container ID returned');
+                continue;
+              }
+
+              await sleep(4000);
+
+              // Publish
+              const pub = await post(`https://graph.facebook.com/v21.0/${IG_ID}/media_publish`, {
+                creation_id: container.id,
+                access_token: TOKEN
+              });
+              console.log('  Published:', JSON.stringify(pub));
+
+              if (i < FILES.length - 1) await sleep(15000);
+            }
+            console.log('\nDone.');
+          }
+
+          main().catch(e => { console.error(e); process.exit(1); });
+          JSEOF
