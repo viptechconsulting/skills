@@ -17,24 +17,9 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
         with:
           fetch-depth: 2
-
-      - name: Get story images
-        id: changed
-        run: |
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            FOLDER="${{ github.event.inputs.stories_folder }}"
-            FILES=$(find "$FOLDER" -name "*.jpg" -o -name "*.png" 2>/dev/null | sort)
-          else
-            FILES=$(git diff --name-only HEAD~1 HEAD -- 'stories/**' | grep -E '\.(jpg|png)$' | sort)
-          fi
-          echo "files<<EOF" >> $GITHUB_OUTPUT
-          echo "$FILES" >> $GITHUB_OUTPUT
-          echo "EOF" >> $GITHUB_OUTPUT
-          echo "Found files: $FILES"
 
       - name: Publish to Instagram
         env:
@@ -42,74 +27,37 @@ jobs:
           IG_ID: ${{ secrets.IG_ID }}
           REPO: ${{ github.repository }}
           BRANCH: ${{ github.ref_name }}
-          FILES: ${{ steps.changed.outputs.files }}
+          EVENT: ${{ github.event_name }}
+          FOLDER: ${{ github.event.inputs.stories_folder }}
         run: |
-          node << 'JSEOF'
-          const https = require('https');
+          node << 'EOF'
+          const { IG_ID, IG_ACCESS_TOKEN: TOKEN, REPO, BRANCH, EVENT, FOLDER } = process.env;
+          const { execSync } = require('child_process');
 
-          const IG_ID = process.env.IG_ID;
-          const TOKEN = process.env.IG_ACCESS_TOKEN;
-          const REPO = process.env.REPO;
-          const BRANCH = process.env.BRANCH;
-          const FILES = process.env.FILES.trim().split('\n').filter(f => f.length > 0);
+          const files = EVENT === 'workflow_dispatch'
+            ? execSync(`find "${FOLDER}" -name "*.jpg" -o -name "*.png" 2>/dev/null | sort`).toString().trim().split('\n').filter(Boolean)
+            : execSync(`git diff --name-only HEAD~1 HEAD -- 'stories/**'`).toString().trim().split('\n').filter(f => /\.(jpg|png)$/.test(f));
 
-          if (FILES.length === 0) {
-            console.log('No story images found.');
-            process.exit(0);
-          }
+          if (!files.length) { console.log('No stories found.'); process.exit(0); }
 
-          console.log(`Publishing ${FILES.length} stories: ${FILES.join(', ')}`);
+          const api = (path, params) => fetch(`https://graph.facebook.com/v21.0/${path}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: new URLSearchParams({ ...params, access_token: TOKEN })
+          }).then(r => r.json());
 
-          function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+          const sleep = ms => new Promise(r => setTimeout(r, ms));
 
-          function post(url, params) {
-            return new Promise((resolve, reject) => {
-              const body = new URLSearchParams(params).toString();
-              const u = new URL(url);
-              const req = https.request({
-                hostname: u.hostname, path: u.pathname + u.search, method: 'POST',
-                headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'Content-Length': Buffer.byteLength(body) }
-              }, res => {
-                let d = '';
-                res.on('data', c => d += c);
-                res.on('end', () => resolve(JSON.parse(d)));
-              });
-              req.on('error', reject);
-              req.write(body);
-              req.end();
-            });
-          }
-
-          async function main() {
-            for (let i = 0; i < FILES.length; i++) {
-              const file = FILES[i];
-              const imageUrl = `https://raw.githubusercontent.com/${REPO}/${BRANCH}/${file}`;
-              console.log(`\nStory ${i+1}/${FILES.length}: ${imageUrl}`);
-
-              const container = await post(`https://graph.facebook.com/v21.0/${IG_ID}/media`, {
-                image_url: imageUrl,
-                media_type: 'STORIES',
-                access_token: TOKEN
-              });
-              console.log('  Container:', JSON.stringify(container));
-
-              if (!container.id) {
-                console.error('  ERROR: No container ID returned');
-                continue;
-              }
-
+          (async () => {
+            for (const [i, file] of files.entries()) {
+              const image_url = `https://raw.githubusercontent.com/${REPO}/${BRANCH}/${file}`;
+              console.log(`Story ${i+1}/${files.length}: ${file}`);
+              const { id } = await api(`${IG_ID}/media`, { image_url, media_type: 'STORIES' });
+              if (!id) { console.error('No container ID'); continue; }
               await sleep(4000);
-
-              const pub = await post(`https://graph.facebook.com/v21.0/${IG_ID}/media_publish`, {
-                creation_id: container.id,
-                access_token: TOKEN
-              });
-              console.log('  Published:', JSON.stringify(pub));
-
-              if (i < FILES.length - 1) await sleep(15000);
+              const pub = await api(`${IG_ID}/media_publish`, { creation_id: id });
+              console.log('Published:', pub.id);
+              if (i < files.length - 1) await sleep(15000);
             }
-            console.log('\nDone.');
-          }
-
-          main().catch(e => { console.error(e); process.exit(1); });
-          JSEOF
+          })().catch(e => { console.error(e); process.exit(1); });
+          EOF
