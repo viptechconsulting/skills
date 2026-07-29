@@ -1,0 +1,13 @@
+node_modules
+**/node_modules
+**/dist
+**/.next
+**/coverage
+**/*.tsbuildinfo
+.git
+.env
+.env.local
+.env.*.local
+packages/db/generated
+carousel-lynkro-tipo-i
+stories

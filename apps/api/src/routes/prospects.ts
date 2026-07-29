@@ -1,0 +1,237 @@
+import type { FastifyInstance } from "fastify";
+import { z } from "zod";
+import { prisma, recordAuditLog } from "@lynkro-outbound/db";
+import {
+  createProspectSchema,
+  normalizePhoneToE164,
+  scheduleCallSchema,
+  updateProspectSchema,
+  PROSPECT_STATUSES,
+} from "@lynkro-outbound/shared";
+import { importProspectsFromCsv } from "../services/csvImportService.js";
+import { checkProspectEligibility } from "@lynkro-outbound/domain";
+import { enqueueCallDispatch } from "../lib/queues.js";
+
+const listProspectsQuerySchema = z.object({
+  campaignId: z.string().uuid().optional(),
+  status: z.enum(PROSPECT_STATUSES).optional(),
+});
+
+export async function prospectRoutes(fastify: FastifyInstance): Promise<void> {
+  fastify.addHook("preHandler", fastify.authenticate);
+
+  fastify.get("/prospects", async (request, reply) => {
+    const organizationId = request.auth!.organizationId;
+    const parsedQuery = listProspectsQuerySchema.safeParse(request.query);
+    if (!parsedQuery.success) {
+      return reply.code(400).send({ error: "VALIDATION_ERROR", details: parsedQuery.error.issues });
+    }
+    const query = parsedQuery.data;
+    const prospects = await prisma.prospect.findMany({
+      where: {
+        organizationId,
+        ...(query.campaignId ? { campaignId: query.campaignId } : {}),
+        ...(query.status ? { status: query.status } : {}),
+      },
+      orderBy: { createdAt: "desc" },
+    });
+    return reply.send({ prospects });
+  });
+
+  fastify.post("/prospects", async (request, reply) => {
+    const organizationId = request.auth!.organizationId;
+    const parsed = createProspectSchema.safeParse(request.body);
+    if (!parsed.success) {
+      return reply.code(400).send({ error: "VALIDATION_ERROR", details: parsed.error.issues });
+    }
+    const data = parsed.data;
+    const normalized = normalizePhoneToE164(data.phone, data.defaultCountry as never);
+    if (!normalized.ok || !normalized.e164) {
+      return reply.code(400).send({ error: "INVALID_PHONE_NUMBER", reason: normalized.reason });
+    }
+
+    const existing = await prisma.prospect.findFirst({
+      where: { organizationId, phoneE164: normalized.e164 },
+    });
+    if (existing) {
+      return reply.code(409).send({ error: "DUPLICATE_PROSPECT", prospectId: existing.id });
+    }
+
+    const prospect = await prisma.prospect.create({
+      data: {
+        organizationId,
+        campaignId: data.campaignId,
+        name: data.name,
+        phoneE164: normalized.e164,
+        company: data.company,
+        email: data.email,
+        language: data.language,
+        timezone: data.timezone,
+        context: data.context,
+        intent: data.intent,
+        desiredOutcome: data.desiredOutcome,
+        source: data.source,
+        consentGiven: data.consentGiven,
+        consentDate: data.consentDate,
+        tags: data.tags,
+        status: "new",
+      },
+    });
+
+    return reply.code(201).send({ prospect });
+  });
+
+  fastify.post("/prospects/import", async (request, reply) => {
+    const organizationId = request.auth!.organizationId;
+    const file = await request.file();
+    if (!file) return reply.code(400).send({ error: "NO_FILE_PROVIDED" });
+    const buffer = await file.toBuffer();
+    const result = await importProspectsFromCsv(organizationId, buffer.toString("utf-8"));
+
+    await recordAuditLog(prisma, {
+      organizationId,
+      actorUserId: request.auth!.userId,
+      entityType: "prospect_import",
+      entityId: "csv",
+      action: "import",
+      after: result as never,
+    });
+
+    return reply.send({ result });
+  });
+
+  fastify.get("/prospects/:id", async (request, reply) => {
+    const organizationId = request.auth!.organizationId;
+    const { id } = request.params as { id: string };
+    const prospect = await prisma.prospect.findFirst({ where: { id, organizationId } });
+    if (!prospect) return reply.code(404).send({ error: "PROSPECT_NOT_FOUND" });
+    return reply.send({ prospect });
+  });
+
+  fastify.patch("/prospects/:id", async (request, reply) => {
+    const organizationId = request.auth!.organizationId;
+    const { id } = request.params as { id: string };
+    const parsed = updateProspectSchema.safeParse(request.body);
+    if (!parsed.success) {
+      return reply.code(400).send({ error: "VALIDATION_ERROR", details: parsed.error.issues });
+    }
+    const updated = await prisma.prospect.updateMany({ where: { id, organizationId }, data: parsed.data as never });
+    if (updated.count === 0) return reply.code(404).send({ error: "PROSPECT_NOT_FOUND" });
+    const prospect = await prisma.prospect.findFirst({ where: { id, organizationId } });
+    return reply.send({ prospect });
+  });
+
+  fastify.get("/prospects/:id/history", async (request, reply) => {
+    const organizationId = request.auth!.organizationId;
+    const { id } = request.params as { id: string };
+    const calls = await prisma.call.findMany({
+      where: { organizationId, prospectId: id },
+      orderBy: { createdAt: "desc" },
+      include: { events: true },
+    });
+    return reply.send({ calls });
+  });
+
+  fastify.post("/prospects/:id/call-now", async (request, reply) => {
+    const organizationId = request.auth!.organizationId;
+    const { id } = request.params as { id: string };
+
+    const eligibility = await checkProspectEligibility(organizationId, id);
+    if (!eligibility) return reply.code(404).send({ error: "PROSPECT_OR_CAMPAIGN_NOT_FOUND" });
+    if (!eligibility.result.eligible) {
+      return reply.code(422).send({ error: "NOT_ELIGIBLE", reason: eligibility.result.reason });
+    }
+
+    const call = await prisma.call.create({
+      data: {
+        organizationId,
+        campaignId: eligibility.campaign.id,
+        prospectId: id,
+        phoneNumberId: eligibility.campaign.outboundPhoneNumberId,
+        status: "queued",
+        attemptNumber: eligibility.prospect.attemptCount + 1,
+        simulation: eligibility.campaign.simulationMode,
+      },
+    });
+
+    await prisma.prospect.update({ where: { id }, data: { status: "queued" } });
+
+    await enqueueCallDispatch({ callId: call.id, organizationId, reason: "manual" });
+
+    return reply.code(202).send({ call });
+  });
+
+  fastify.post("/prospects/:id/schedule", async (request, reply) => {
+    const organizationId = request.auth!.organizationId;
+    const { id } = request.params as { id: string };
+    const parsed = scheduleCallSchema.safeParse(request.body);
+    if (!parsed.success) {
+      return reply.code(400).send({ error: "VALIDATION_ERROR", details: parsed.error.issues });
+    }
+    const updated = await prisma.prospect.updateMany({
+      where: { id, organizationId },
+      data: { status: "scheduled", nextAttemptAt: parsed.data.scheduledAtUtc },
+    });
+    if (updated.count === 0) return reply.code(404).send({ error: "PROSPECT_NOT_FOUND" });
+    return reply.send({ ok: true });
+  });
+
+  fastify.post("/prospects/:id/cancel", async (request, reply) => {
+    const organizationId = request.auth!.organizationId;
+    const { id } = request.params as { id: string };
+    await prisma.prospect.updateMany({
+      where: { id, organizationId },
+      data: { status: "new", nextAttemptAt: null },
+    });
+    await prisma.call.updateMany({
+      where: { organizationId, prospectId: id, status: { in: ["draft", "scheduled", "queued"] } },
+      data: { status: "canceled", endedAt: new Date() },
+    });
+    return reply.send({ ok: true });
+  });
+
+  fastify.post("/prospects/:id/retry", async (request, reply) => {
+    const organizationId = request.auth!.organizationId;
+    const { id } = request.params as { id: string };
+
+    const eligibility = await checkProspectEligibility(organizationId, id);
+    if (!eligibility) return reply.code(404).send({ error: "PROSPECT_OR_CAMPAIGN_NOT_FOUND" });
+    if (!eligibility.result.eligible) {
+      return reply.code(422).send({ error: "NOT_ELIGIBLE", reason: eligibility.result.reason });
+    }
+
+    const call = await prisma.call.create({
+      data: {
+        organizationId,
+        campaignId: eligibility.campaign.id,
+        prospectId: id,
+        phoneNumberId: eligibility.campaign.outboundPhoneNumberId,
+        status: "queued",
+        attemptNumber: eligibility.prospect.attemptCount + 1,
+        simulation: eligibility.campaign.simulationMode,
+      },
+    });
+    await enqueueCallDispatch({ callId: call.id, organizationId, reason: "retry" });
+    return reply.code(202).send({ call });
+  });
+
+  fastify.post("/prospects/:id/block", async (request, reply) => {
+    const organizationId = request.auth!.organizationId;
+    const { id } = request.params as { id: string };
+    const updated = await prisma.prospect.updateMany({
+      where: { id, organizationId },
+      data: { isBlocked: true, status: "blocked", nextAttemptAt: null },
+    });
+    if (updated.count === 0) return reply.code(404).send({ error: "PROSPECT_NOT_FOUND" });
+
+    await recordAuditLog(prisma, {
+      organizationId,
+      actorUserId: request.auth!.userId,
+      entityType: "prospect",
+      entityId: id,
+      action: "block",
+    });
+
+    return reply.send({ ok: true });
+  });
+}

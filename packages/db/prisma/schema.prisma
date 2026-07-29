@@ -1,0 +1,455 @@
+// Lynkro Outbound — modelo de datos
+// Todas las tablas de negocio incluyen organizationId para aislamiento
+// multi-organización estricto. Ver IMPLEMENTATION_PLAN.md sección 6.
+
+generator client {
+  provider = "prisma-client-js"
+  output   = "../generated/client"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+// ---------------------------------------------------------------------------
+// Organización, usuarios y sesiones
+// ---------------------------------------------------------------------------
+
+model Organization {
+  id              String   @id @default(uuid())
+  name            String
+  timezoneDefault String   @default("America/Mexico_City")
+  simulationMode  Boolean  @default(true)
+  consentRequired Boolean  @default(true)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  users                  User[]
+  integrationCredentials IntegrationCredential[]
+  phoneNumbers           PhoneNumber[]
+  voiceAgents            VoiceAgent[]
+  campaigns              Campaign[]
+  prospects              Prospect[]
+  doNotCallEntries       DoNotCall[]
+  calls                  Call[]
+  appointments           Appointment[]
+  auditLogs              AuditLog[]
+
+  @@map("organizations")
+}
+
+enum UserRole {
+  owner
+  admin
+  agent
+}
+
+model User {
+  id             String   @id @default(uuid())
+  organizationId String
+  email          String
+  passwordHash   String
+  role           UserRole @default(agent)
+  isActive       Boolean  @default(true)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  sessions     Session[]
+  auditLogs    AuditLog[]
+
+  @@unique([organizationId, email])
+  @@index([organizationId])
+  @@map("users")
+}
+
+model Session {
+  id           String    @id @default(uuid())
+  userId       String
+  refreshToken String    @unique
+  userAgent    String?
+  ipAddress    String?
+  expiresAt    DateTime
+  createdAt    DateTime  @default(now())
+  revokedAt    DateTime?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("sessions")
+}
+
+// ---------------------------------------------------------------------------
+// Integraciones (credenciales cifradas en aplicación, nunca en texto plano)
+// ---------------------------------------------------------------------------
+
+enum IntegrationProvider {
+  twilio
+  openai
+  gohighlevel
+}
+
+model IntegrationCredential {
+  id               String              @id @default(uuid())
+  organizationId   String
+  provider         IntegrationProvider
+  encryptedPayload String
+  isActive         Boolean             @default(true)
+  createdAt        DateTime            @default(now())
+  updatedAt        DateTime            @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, provider])
+  @@index([organizationId])
+  @@map("integration_credentials")
+}
+
+model PhoneNumber {
+  id             String   @id @default(uuid())
+  organizationId String
+  e164           String
+  label          String
+  provider       String   @default("twilio")
+  isActive       Boolean  @default(true)
+  createdAt      DateTime @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  campaigns    Campaign[]
+
+  @@unique([organizationId, e164])
+  @@index([organizationId])
+  @@map("phone_numbers")
+}
+
+model VoiceAgent {
+  id                   String   @id @default(uuid())
+  organizationId       String
+  name                 String
+  persona              String
+  defaultLanguage      String   @default("es")
+  voice                String   @default("alloy")
+  systemPromptTemplate String
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  campaigns    Campaign[]
+
+  @@index([organizationId])
+  @@map("voice_agents")
+}
+
+// ---------------------------------------------------------------------------
+// Campañas
+// ---------------------------------------------------------------------------
+
+enum CampaignStatus {
+  draft
+  active
+  paused
+  archived
+}
+
+model Campaign {
+  id                     String         @id @default(uuid())
+  organizationId         String
+  name                   String
+  description            String         @default("")
+  language               String         @default("es")
+  objective              String
+  allowedWindowStart     String         @default("09:00")
+  allowedWindowEnd       String         @default("19:00")
+  timezoneDefault        String
+  outboundPhoneNumberId  String
+  maxAttempts            Int            @default(3)
+  attemptIntervalMinutes Int            @default(240)
+  targetCalendarId       String?
+  voiceAgentId           String
+  agentInstructions      String
+  qualificationQuestions Json           @default("[]")
+  bookingConditions      String         @default("")
+  transferConditions     String         @default("")
+  voicemailMessage       String         @default("")
+  postCallBehavior       Json           @default("{}")
+  status                 CampaignStatus @default(draft)
+  recordingEnabled       Boolean        @default(false)
+  simulationMode         Boolean        @default(true)
+  consentRequired        Boolean        @default(true)
+  transferToPhoneNumber  String?
+  createdAt              DateTime       @default(now())
+  updatedAt              DateTime       @updatedAt
+
+  organization        Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  outboundPhoneNumber PhoneNumber   @relation(fields: [outboundPhoneNumberId], references: [id])
+  voiceAgent          VoiceAgent    @relation(fields: [voiceAgentId], references: [id])
+  prospects           Prospect[]
+  calls               Call[]
+  retryPolicies       RetryPolicy[]
+
+  @@index([organizationId])
+  @@index([organizationId, status])
+  @@map("campaigns")
+}
+
+enum RetryReason {
+  no_answer
+  busy
+  voicemail
+  technical_failure
+}
+
+model RetryPolicy {
+  id                   String      @id @default(uuid())
+  campaignId           String
+  reason               RetryReason
+  maxAttempts          Int
+  intervalMinutes      Int
+  spreadAcrossDayparts Boolean     @default(true)
+
+  campaign Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+
+  @@unique([campaignId, reason])
+  @@map("retry_policies")
+}
+
+// ---------------------------------------------------------------------------
+// Prospectos y Do Not Call
+// ---------------------------------------------------------------------------
+
+enum ProspectStatus {
+  new
+  scheduled
+  queued
+  in_progress
+  completed
+  blocked
+  do_not_call
+}
+
+model Prospect {
+  id             String         @id @default(uuid())
+  organizationId String
+  campaignId     String?
+  name           String
+  phoneE164      String
+  company        String         @default("")
+  email          String?
+  language       String         @default("es")
+  timezone       String
+  context        String         @default("")
+  intent         String
+  desiredOutcome String
+  source         String
+  consentGiven   Boolean        @default(false)
+  consentDate    DateTime?
+  status         ProspectStatus @default(new)
+  tags           String[]       @default([])
+  attemptCount   Int            @default(0)
+  lastAttemptAt  DateTime?
+  nextAttemptAt  DateTime?
+  finalOutcome   String?
+  isBlocked      Boolean        @default(false)
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+
+  organization Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  campaign     Campaign?     @relation(fields: [campaignId], references: [id])
+  calls        Call[]
+  appointments Appointment[]
+
+  @@unique([organizationId, phoneE164])
+  @@index([organizationId])
+  @@index([organizationId, status])
+  @@index([organizationId, nextAttemptAt])
+  @@map("prospects")
+}
+
+model DoNotCall {
+  id             String   @id @default(uuid())
+  organizationId String
+  phoneE164      String
+  reason         String
+  source         String   @default("prospect_request")
+  createdAt      DateTime @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, phoneE164])
+  @@index([organizationId])
+  @@map("do_not_call_entries")
+}
+
+// ---------------------------------------------------------------------------
+// Llamadas
+// ---------------------------------------------------------------------------
+
+enum CallStatus {
+  draft
+  scheduled
+  queued
+  eligibility_failed
+  dialing
+  initiated
+  ringing
+  answered
+  human_detected
+  voicemail_detected
+  in_progress
+  transferring
+  completed
+  no_answer
+  busy
+  failed
+  canceled
+  blocked
+}
+
+enum CallOutcome {
+  BOOKED
+  QUALIFIED_NOT_BOOKED
+  CALLBACK_REQUESTED
+  TRANSFERRED
+  NOT_INTERESTED
+  DO_NOT_CALL
+  WRONG_NUMBER
+  VOICEMAIL
+  NO_ANSWER
+  BUSY
+  FAILED
+}
+
+model Call {
+  id                         String       @id @default(uuid())
+  organizationId             String
+  campaignId                 String
+  prospectId                 String
+  phoneNumberId              String
+  status                     CallStatus   @default(draft)
+  attemptNumber              Int
+  scheduledAtUtc             DateTime?
+  startedAt                  DateTime?
+  endedAt                    DateTime?
+  durationSeconds            Int?
+  costUsd                    Decimal?     @db.Decimal(10, 4)
+  providerCallSid            String?
+  outcome                    CallOutcome?
+  summary                    String?
+  transcript                 Json?
+  recordingUrl               String?
+  qualificationAnswers       Json         @default("{}")
+  objections                 Json         @default("[]")
+  interestLevel              String?
+  isDecisionMaker            Boolean?
+  nextStep                   String?
+  simulation                 Boolean      @default(true)
+  eligibilityRejectionReason String?
+  createdAt                  DateTime     @default(now())
+  updatedAt                  DateTime     @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  campaign     Campaign     @relation(fields: [campaignId], references: [id])
+  prospect     Prospect     @relation(fields: [prospectId], references: [id])
+
+  events         CallEvent[]
+  toolExecutions CallToolExecution[]
+  appointments   Appointment[]
+
+  @@index([organizationId])
+  @@index([organizationId, status])
+  @@index([prospectId])
+  @@index([providerCallSid])
+  @@map("calls")
+}
+
+model CallEvent {
+  id             String   @id @default(uuid())
+  callId         String
+  type           String
+  payload        Json     @default("{}")
+  causedBy       String   @default("system")
+  idempotencyKey String   @unique
+  createdAt      DateTime @default(now())
+
+  call Call @relation(fields: [callId], references: [id], onDelete: Cascade)
+
+  @@index([callId])
+  @@map("call_events")
+}
+
+model CallToolExecution {
+  id           String   @id @default(uuid())
+  callId       String
+  toolName     String
+  args         Json
+  result       Json?
+  authorized   Boolean
+  errorMessage String?
+  createdAt    DateTime @default(now())
+
+  call Call @relation(fields: [callId], references: [id], onDelete: Cascade)
+
+  @@index([callId])
+  @@map("call_tool_executions")
+}
+
+// ---------------------------------------------------------------------------
+// Citas
+// ---------------------------------------------------------------------------
+
+enum AppointmentStatus {
+  scheduled
+  confirmed
+  rescheduled
+  canceled
+  completed
+  no_show
+}
+
+model Appointment {
+  id               String            @id @default(uuid())
+  organizationId   String
+  prospectId       String
+  callId           String?
+  ghlAppointmentId String?
+  startsAt         DateTime
+  endsAt           DateTime
+  timezone         String
+  status           AppointmentStatus @default(scheduled)
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  prospect     Prospect     @relation(fields: [prospectId], references: [id])
+  call         Call?        @relation(fields: [callId], references: [id])
+
+  @@index([organizationId])
+  @@index([prospectId])
+  @@index([organizationId, startsAt])
+  @@map("appointments")
+}
+
+// ---------------------------------------------------------------------------
+// Auditoría
+// ---------------------------------------------------------------------------
+
+model AuditLog {
+  id             String   @id @default(uuid())
+  organizationId String
+  actorUserId    String?
+  entityType     String
+  entityId       String
+  action         String
+  before         Json?
+  after          Json?
+  createdAt      DateTime @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  actor        User?        @relation(fields: [actorUserId], references: [id])
+
+  @@index([organizationId])
+  @@index([organizationId, entityType, entityId])
+  @@map("audit_logs")
+}

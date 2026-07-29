@@ -1,0 +1,172 @@
+import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
+import type { FastifyInstance } from "fastify";
+import { prisma } from "@lynkro-outbound/db";
+import { buildTestApp, resetDatabase } from "../testHelpers.js";
+
+let app: FastifyInstance;
+
+beforeAll(async () => {
+  app = await buildTestApp();
+  await app.ready();
+});
+
+afterEach(async () => {
+  await resetDatabase();
+});
+
+afterAll(async () => {
+  await app.close();
+  await prisma.$disconnect();
+});
+
+function extractCookie(setCookieHeader: string | string[] | undefined): string {
+  const raw = Array.isArray(setCookieHeader) ? setCookieHeader[0] : setCookieHeader;
+  return raw?.split(";")[0] ?? "";
+}
+
+async function registerAndGetCookie(email: string) {
+  const response = await app.inject({
+    method: "POST",
+    url: "/auth/register",
+    payload: { organizationName: `Org ${email}`, email, password: "SuperSecreta!2026" },
+  });
+  return { cookie: extractCookie(response.headers["set-cookie"]), organizationId: response.json().organizationId };
+}
+
+async function createPhoneAndAgent(organizationId: string) {
+  const phoneNumber = await prisma.phoneNumber.create({
+    data: { organizationId, e164: "+15005550201", label: "Test" },
+  });
+  const voiceAgent = await prisma.voiceAgent.create({
+    data: { organizationId, name: "Agente", persona: "Test", systemPromptTemplate: "default_v1" },
+  });
+  return { phoneNumber, voiceAgent };
+}
+
+describe("prospect routes: elegibilidad y acciones", () => {
+  it("rechaza call-now cuando el prospecto está en Do Not Call", async () => {
+    const { cookie, organizationId } = await registerAndGetCookie("dnc-reject@test.com");
+    const { phoneNumber, voiceAgent } = await createPhoneAndAgent(organizationId);
+
+    const campaignResponse = await app.inject({
+      method: "POST",
+      url: "/campaigns",
+      headers: { cookie },
+      payload: {
+        name: "Campaña",
+        language: "es",
+        objective: "Objetivo",
+        allowedWindow: { start: "00:00", end: "00:00" },
+        timezoneDefault: "America/Bogota",
+        outboundPhoneNumberId: phoneNumber.id,
+        maxAttempts: 3,
+        attemptIntervalMinutes: 60,
+        voiceAgentId: voiceAgent.id,
+        agentInstructions: "Instrucciones",
+      },
+    });
+    const campaignId = campaignResponse.json().campaign.id;
+    await app.inject({ method: "PATCH", url: `/campaigns/${campaignId}`, headers: { cookie }, payload: { status: "active" } });
+
+    const phone = "+14155559911";
+    await prisma.doNotCall.create({ data: { organizationId, phoneE164: phone, reason: "solicitud previa" } });
+
+    const prospectResponse = await app.inject({
+      method: "POST",
+      url: "/prospects",
+      headers: { cookie },
+      payload: {
+        name: "Prospecto DNC",
+        phone,
+        language: "es",
+        timezone: "America/Bogota",
+        intent: "test",
+        desiredOutcome: "test",
+        source: "test",
+        consentGiven: true,
+        campaignId,
+      },
+    });
+    const prospectId = prospectResponse.json().prospect.id;
+
+    const callNowResponse = await app.inject({
+      method: "POST",
+      url: `/prospects/${prospectId}/call-now`,
+      headers: { cookie },
+    });
+
+    expect(callNowResponse.statusCode).toBe(422);
+    expect(callNowResponse.json().reason).toBe("DO_NOT_CALL_LISTED");
+  });
+
+  it("cancel detiene llamadas en estados no terminales y no toca las ya en curso", async () => {
+    const { cookie, organizationId } = await registerAndGetCookie("cancel-test@test.com");
+    const { phoneNumber, voiceAgent } = await createPhoneAndAgent(organizationId);
+    const campaign = await prisma.campaign.create({
+      data: {
+        organizationId,
+        name: "Campaña cancel",
+        objective: "Objetivo",
+        timezoneDefault: "America/Bogota",
+        outboundPhoneNumberId: phoneNumber.id,
+        voiceAgentId: voiceAgent.id,
+        agentInstructions: "Instrucciones",
+        status: "active",
+      },
+    });
+    const prospect = await prisma.prospect.create({
+      data: {
+        organizationId,
+        campaignId: campaign.id,
+        name: "Prospecto",
+        phoneE164: "+14155559922",
+        timezone: "America/Bogota",
+        intent: "test",
+        desiredOutcome: "test",
+        source: "test",
+        status: "scheduled",
+      },
+    });
+    const queuedCall = await prisma.call.create({
+      data: {
+        organizationId,
+        campaignId: campaign.id,
+        prospectId: prospect.id,
+        phoneNumberId: phoneNumber.id,
+        status: "queued",
+        attemptNumber: 1,
+      },
+    });
+
+    const response = await app.inject({ method: "POST", url: `/prospects/${prospect.id}/cancel`, headers: { cookie } });
+    expect(response.statusCode).toBe(200);
+
+    const updatedCall = await prisma.call.findUniqueOrThrow({ where: { id: queuedCall.id } });
+    expect(updatedCall.status).toBe("canceled");
+
+    const updatedProspect = await prisma.prospect.findUniqueOrThrow({ where: { id: prospect.id } });
+    expect(updatedProspect.status).toBe("new");
+    expect(updatedProspect.nextAttemptAt).toBeNull();
+  });
+
+  it("rechaza crear un prospecto duplicado por teléfono dentro de la misma organización", async () => {
+    const { cookie } = await registerAndGetCookie("dup-test@test.com");
+    const payload = {
+      name: "Prospecto",
+      phone: "+14155559933",
+      language: "es",
+      timezone: "America/Bogota",
+      intent: "test",
+      desiredOutcome: "test",
+      source: "test",
+      consentGiven: true,
+    };
+
+    const first = await app.inject({ method: "POST", url: "/prospects", headers: { cookie }, payload });
+    expect(first.statusCode).toBe(201);
+
+    const second = await app.inject({ method: "POST", url: "/prospects", headers: { cookie }, payload });
+    expect(second.statusCode).toBe(409);
+    expect(second.json().error).toBe("DUPLICATE_PROSPECT");
+  });
+});
