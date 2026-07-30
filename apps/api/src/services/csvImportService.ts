@@ -14,6 +14,15 @@ export async function importProspectsFromCsv(organizationId: string, csvContent:
   let rejected = 0;
   const errors: { row: number; message: string }[] = [];
 
+  // Se valida contra la organización ANTES del insert: sin esto, una fila con
+  // un campaignId inexistente o de otra organización revienta con una
+  // violación de foreign key sin capturar, aborta el loop entero y deja de
+  // procesar el resto del archivo (las filas ya creadas antes del error
+  // quedan, pero todo lo que venía después se pierde sin reportarse).
+  const validCampaignIds = new Set(
+    (await prisma.campaign.findMany({ where: { organizationId }, select: { id: true } })).map((c) => c.id),
+  );
+
   for (let i = 0; i < rawRows.length; i += 1) {
     const rowNumber = i + 2; // +1 por índice base 0, +1 por la fila de encabezados
     const rawRow = rawRows[i];
@@ -22,6 +31,15 @@ export async function importProspectsFromCsv(organizationId: string, csvContent:
     if (!parsedRow.success) {
       rejected += 1;
       errors.push({ row: rowNumber, message: parsedRow.error.issues.map((iss) => iss.message).join("; ") });
+      continue;
+    }
+
+    if (parsedRow.data.campaignId && !validCampaignIds.has(parsedRow.data.campaignId)) {
+      rejected += 1;
+      errors.push({
+        row: rowNumber,
+        message: `La campaña "${parsedRow.data.campaignId}" no existe en esta organización.`,
+      });
       continue;
     }
 

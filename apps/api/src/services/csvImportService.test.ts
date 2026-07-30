@@ -14,6 +14,7 @@ afterAll(async () => {
 
 const CSV_HEADER =
   "name,phone,company,email,language,timezone,context,intent,desiredOutcome,source,consentGiven,tags";
+const CSV_HEADER_WITH_CAMPAIGN = `${CSV_HEADER},campaignId`;
 
 describe("importProspectsFromCsv", () => {
   it("crea prospectos normalizando el teléfono a E.164", async () => {
@@ -55,6 +56,20 @@ describe("importProspectsFromCsv", () => {
     expect(result.created).toBe(1);
     expect(result.rejected).toBe(1);
     expect(result.errors).toHaveLength(1);
+  });
+
+  it("rechaza una fila con campaignId inexistente sin abortar el resto ni tirar 500", async () => {
+    const org = await seedOrgWithCampaign("Csv5");
+    const csv = `${CSV_HEADER_WITH_CAMPAIGN}\nCon campaña válida,+14155550103,Acme,,es,America/Bogota,,Intención,Resultado,formulario,true,,${org.campaign.id}\nCon campaña inexistente,+14155550104,Acme,,es,America/Bogota,,Intención,Resultado,formulario,true,,00000000-0000-0000-0000-000000000099`;
+
+    const result = await importProspectsFromCsv(org.organization.id, csv);
+
+    expect(result.created).toBe(1);
+    expect(result.rejected).toBe(1);
+    expect(result.errors[0]?.message).toContain("no existe en esta organización");
+
+    const prospect = await prisma.prospect.findFirstOrThrow({ where: { organizationId: org.organization.id } });
+    expect(prospect.campaignId).toBe(org.campaign.id);
   });
 
   it("permite el mismo teléfono en organizaciones distintas", async () => {
