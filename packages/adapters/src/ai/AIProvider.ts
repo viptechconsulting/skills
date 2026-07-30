@@ -23,7 +23,13 @@ export interface RealtimeToolCallRequest {
 
 export interface RealtimeSessionEvents {
   onAudioChunk: (base64Audio: string) => void;
-  onToolCall: (request: RealtimeToolCallRequest) => void;
+  /**
+   * Puede devolver una Promise; implementaciones que necesiten garantizar
+   * que la ejecución de la herramienta (y su escritura en base de datos)
+   * termine antes de avanzar (p. ej. el guion de simulación, antes de
+   * disparar onClose) deben esperar esa promesa.
+   */
+  onToolCall: (request: RealtimeToolCallRequest) => void | Promise<void>;
   onTranscriptDelta: (speaker: "agent" | "prospect", text: string) => void;
   onSpeechStartedByProspect: () => void;
   onError: (error: Error) => void;

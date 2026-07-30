@@ -50,10 +50,14 @@ const defaultScriptFactory: SimulationScriptFactory = (config) => [
   { afterMs: 210, kind: "close" },
 ];
 
+function delay(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 class SimulationRealtimeSession implements RealtimeSession {
-  private timers: ReturnType<typeof setTimeout>[] = [];
   private events: RealtimeSessionEvents | null = null;
   private closed = false;
+  private runPromise: Promise<void> | null = null;
 
   constructor(
     private readonly config: RealtimeSessionConfig,
@@ -63,15 +67,27 @@ class SimulationRealtimeSession implements RealtimeSession {
   async start(events: RealtimeSessionEvents): Promise<void> {
     this.events = events;
     const script = this.scriptFactory(this.config);
+    // Se ejecuta en segundo plano (start() no debe bloquear hasta el final
+    // del guion) pero de forma estrictamente secuencial: cada paso —
+    // incluida la ejecución de una tool call y su escritura en base de
+    // datos — se espera antes de continuar con el siguiente. Esto evita
+    // que "close" se dispare antes de que end_call termine de persistir el
+    // resultado estructurado (una condición de carrera real detectada en
+    // pruebas manuales).
+    this.runPromise = this.runScript(script);
+  }
 
+  private async runScript(script: SimulationScriptStep[]): Promise<void> {
     for (const step of script) {
-      const timer = setTimeout(() => this.runStep(step), step.afterMs);
-      this.timers.push(timer);
+      if (this.closed) return;
+      await delay(step.afterMs);
+      if (this.closed || !this.events) return;
+      await this.runStep(step);
     }
   }
 
-  private runStep(step: SimulationScriptStep): void {
-    if (this.closed || !this.events) return;
+  private async runStep(step: SimulationScriptStep): Promise<void> {
+    if (!this.events) return;
 
     if (step.kind === "transcript" && step.speaker && step.text) {
       this.events.onTranscriptDelta(step.speaker, step.text);
@@ -81,7 +97,7 @@ class SimulationRealtimeSession implements RealtimeSession {
         name: step.toolCall.name,
         argumentsJson: JSON.stringify(step.toolCall.args),
       };
-      this.events.onToolCall(request);
+      await this.events.onToolCall(request);
     } else if (step.kind === "close") {
       this.events.onClose();
     }
@@ -101,8 +117,7 @@ class SimulationRealtimeSession implements RealtimeSession {
 
   async close(): Promise<void> {
     this.closed = true;
-    this.timers.forEach(clearTimeout);
-    this.timers = [];
+    await this.runPromise?.catch(() => undefined);
   }
 }
 
