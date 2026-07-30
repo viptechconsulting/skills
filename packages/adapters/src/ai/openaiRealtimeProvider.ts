@@ -51,6 +51,12 @@ class OpenAIRealtimeSession implements RealtimeSession {
 
       this.ws.on("open", () => {
         this.sendSessionUpdate();
+        // Llamada saliente: el agente debe hablar primero (identificarse,
+        // explicar el motivo de la llamada). Con turn_detection server_vad
+        // el modelo solo responde después de detectar que el prospecto
+        // dejó de hablar, así que sin este disparo inicial se queda
+        // esperando en silencio indefinidamente.
+        this.send({ type: "response.create" });
         this.startHeartbeatWatchdog();
         resolve();
       });
