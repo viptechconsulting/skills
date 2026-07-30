@@ -70,6 +70,19 @@ describe("processCallDispatch", () => {
     expect(finalCall.eligibilityRejectionReason).toBe("DO_NOT_CALL_LISTED");
   });
 
+  it("marca la llamada como failed (con el motivo en summary) si faltan credenciales reales en vez de dejarla atascada en queued", async () => {
+    const org = await seedOrganizationFixture(prisma, "Dispatch4");
+    await prisma.campaign.update({ where: { id: org.campaignId }, data: { simulationMode: false } });
+    const { call } = await createQueuedCall(org.organizationId, org.campaignId, "+14155552004");
+
+    await processCallDispatch({ callId: call.id, organizationId: org.organizationId, reason: "manual" });
+
+    const finalCall = await prisma.call.findUniqueOrThrow({ where: { id: call.id } });
+    expect(finalCall.status).toBe("failed");
+    expect(finalCall.outcome).toBe("FAILED");
+    expect(finalCall.summary).toContain("Twilio");
+  });
+
   it("no hace nada si la llamada ya no está en estado queued (evita doble procesamiento)", async () => {
     const org = await seedOrganizationFixture(prisma, "Dispatch3");
     const { call } = await createQueuedCall(org.organizationId, org.campaignId, "+14155552003");

@@ -42,19 +42,25 @@ export async function processCallDispatch(job: CallDispatchJob): Promise<void> {
   }
 
   const { campaign, prospect } = eligibility;
-  const adapters = await getAdapterBundleForOrganization(job.organizationId, campaign.simulationMode);
 
+  // A partir de aquí la llamada pasa a "dialing" (única transición válida
+  // desde "queued" antes de fallar): así, si construir los adaptadores o el
+  // origen real fallan, "dialing" -> "failed" es una transición válida y el
+  // motivo queda visible en el detalle de la llamada, en vez de dejarla
+  // atascada en "queued" para siempre sin ningún error visible.
   await transitionCall({ organizationId: job.organizationId, callId: call.id, toStatus: "dialing", causedBy: "worker" });
 
-  if (campaign.simulationMode) {
-    await runSimulatedCall({ call, campaign, prospect, adapters });
-    return;
-  }
-
-  const phoneNumber = await prisma.phoneNumber.findUniqueOrThrow({ where: { id: campaign.outboundPhoneNumberId } });
-  const base = env.TWILIO_WEBHOOK_BASE_URL;
-
   try {
+    const adapters = await getAdapterBundleForOrganization(job.organizationId, campaign.simulationMode);
+
+    if (campaign.simulationMode) {
+      await runSimulatedCall({ call, campaign, prospect, adapters });
+      return;
+    }
+
+    const phoneNumber = await prisma.phoneNumber.findUniqueOrThrow({ where: { id: campaign.outboundPhoneNumberId } });
+    const base = env.TWILIO_WEBHOOK_BASE_URL;
+
     const originateResult = await adapters.telephony.originateCall({
       toE164: prospect.phoneE164,
       fromE164: phoneNumber.e164,
@@ -69,13 +75,14 @@ export async function processCallDispatch(job: CallDispatchJob): Promise<void> {
     await transitionCall({ organizationId: job.organizationId, callId: call.id, toStatus: "initiated", causedBy: "worker" });
     await prisma.prospect.update({ where: { id: prospect.id }, data: { status: "in_progress" } });
   } catch (error) {
-    logger.error({ err: (error as Error).message, callId: call.id }, "call_originate_failed");
+    const message = (error as Error).message;
+    logger.error({ err: message, callId: call.id }, "call_dispatch_failed");
     await transitionCall({
       organizationId: job.organizationId,
       callId: call.id,
       toStatus: "failed",
-      causedBy: "worker-originate-error",
+      causedBy: "worker-dispatch-error",
     }).catch(() => undefined);
-    await prisma.call.update({ where: { id: call.id }, data: { outcome: "FAILED" } });
+    await prisma.call.update({ where: { id: call.id }, data: { outcome: "FAILED", summary: message } });
   }
 }
