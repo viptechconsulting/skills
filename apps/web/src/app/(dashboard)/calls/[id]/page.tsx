@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
 import { api, ApiError } from "@/lib/apiClient";
@@ -42,16 +42,49 @@ interface Call {
   toolExecutions: ToolExecution[];
 }
 
+const TERMINAL_CALL_STATUSES = [
+  "completed",
+  "failed",
+  "canceled",
+  "no_answer",
+  "busy",
+  "blocked",
+  "eligibility_failed",
+];
+
 export default function CallDetailPage() {
   const params = useParams<{ id: string }>();
   const [call, setCall] = useState<Call | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const callRef = useRef<Call | null>(null);
 
   useEffect(() => {
-    api
-      .get<{ call: Call }>(`/calls/${params.id}`)
-      .then((d) => setCall(d.call))
-      .catch((err) => setError(err instanceof ApiError ? err.message : "Error al cargar la llamada"));
+    let cancelled = false;
+    function load() {
+      api
+        .get<{ call: Call }>(`/calls/${params.id}`)
+        .then((d) => {
+          if (cancelled) return;
+          callRef.current = d.call;
+          setCall(d.call);
+        })
+        .catch((err) => {
+          if (!cancelled) setError(err instanceof ApiError ? err.message : "Error al cargar la llamada");
+        });
+    }
+    load();
+    // Mientras la llamada siga en curso, refresca sola cada 3s en vez de
+    // dejar al usuario mirando una foto fija del momento en que abrió la
+    // página (el estado real puede haber avanzado varias veces desde entonces).
+    const interval = setInterval(() => {
+      if (callRef.current && !TERMINAL_CALL_STATUSES.includes(callRef.current.status)) {
+        load();
+      }
+    }, 3000);
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+    };
   }, [params.id]);
 
   if (error) return <p className="text-sm text-red-600">{error}</p>;
