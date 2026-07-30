@@ -24,7 +24,9 @@ export const createProspectSchema = z.object({
 });
 export type CreateProspectInput = z.infer<typeof createProspectSchema>;
 
-export const updateProspectSchema = createProspectSchema.partial();
+export const updateProspectSchema = createProspectSchema.partial().extend({
+  campaignId: z.string().uuid().nullable().optional(),
+});
 export type UpdateProspectInput = z.infer<typeof updateProspectSchema>;
 
 /** Fila cruda tal como llega de un CSV importado (antes de normalizar). */

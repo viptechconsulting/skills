@@ -18,6 +18,7 @@ interface Prospect {
   intent: string;
   desiredOutcome: string;
   context: string;
+  campaignId: string | null;
 }
 
 interface CallSummary {
@@ -28,10 +29,18 @@ interface CallSummary {
   attemptNumber: number;
 }
 
+interface CampaignOption {
+  id: string;
+  name: string;
+  simulationMode: boolean;
+}
+
 export default function ProspectDetailPage() {
   const params = useParams<{ id: string }>();
   const [prospect, setProspect] = useState<Prospect | null>(null);
   const [calls, setCalls] = useState<CallSummary[]>([]);
+  const [campaigns, setCampaigns] = useState<CampaignOption[]>([]);
+  const [selectedCampaignId, setSelectedCampaignId] = useState("");
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [scheduleAt, setScheduleAt] = useState("");
@@ -39,8 +48,11 @@ export default function ProspectDetailPage() {
   async function load() {
     const { prospect } = await api.get<{ prospect: Prospect }>(`/prospects/${params.id}`);
     setProspect(prospect);
+    setSelectedCampaignId(prospect.campaignId ?? "");
     const { calls } = await api.get<{ calls: CallSummary[] }>(`/prospects/${params.id}/history`);
     setCalls(calls);
+    const { campaigns } = await api.get<{ campaigns: CampaignOption[] }>("/campaigns");
+    setCampaigns(campaigns);
   }
 
   useEffect(() => {
@@ -98,6 +110,40 @@ export default function ProspectDetailPage() {
         >
           Bloquear comunicaciones
         </button>
+      </div>
+
+      <div className="card mb-6">
+        <h2 className="mb-3 font-semibold">Campaña asignada</h2>
+        <div className="flex items-end gap-3">
+          <div className="flex-1">
+            <label className="label" htmlFor="p-campaign">Campaña</label>
+            <select
+              id="p-campaign"
+              className="input"
+              value={selectedCampaignId}
+              onChange={(e) => setSelectedCampaignId(e.target.value)}
+            >
+              <option value="">Sin campaña</option>
+              {campaigns.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.name} ({c.simulationMode ? "Simulación" : "Real"})
+                </option>
+              ))}
+            </select>
+          </div>
+          <button
+            className="btn-secondary"
+            disabled={selectedCampaignId === (prospect.campaignId ?? "")}
+            onClick={() =>
+              runAction(
+                () => api.patch(`/prospects/${prospect.id}`, { campaignId: selectedCampaignId || null }),
+                "Campaña actualizada",
+              )
+            }
+          >
+            Reasignar
+          </button>
+        </div>
       </div>
 
       <div className="card mb-6">

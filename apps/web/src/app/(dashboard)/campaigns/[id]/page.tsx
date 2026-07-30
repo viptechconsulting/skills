@@ -52,6 +52,12 @@ export default function CampaignDetailPage() {
     load();
   }
 
+  async function toggleSimulationMode() {
+    if (!campaign) return;
+    await api.patch(`/campaigns/${campaign.id}`, { simulationMode: !campaign.simulationMode });
+    load();
+  }
+
   if (error) return <p className="text-sm text-red-600">{error}</p>;
   if (!campaign) return <p className="text-sm text-slate-500">Cargando...</p>;
 
@@ -73,6 +79,9 @@ export default function CampaignDetailPage() {
               Pausar
             </button>
           )}
+          <button className="btn-secondary" onClick={toggleSimulationMode}>
+            Cambiar a modo {campaign.simulationMode ? "Real" : "Simulación"}
+          </button>
         </div>
       </div>
 
