@@ -47,7 +47,7 @@ export default function IntegrationsPage() {
 
   async function handleSave(provider: Provider) {
     try {
-      await api.post(`/integrations/${provider}`, forms[provider]);
+      await api.put(`/integrations/${provider}`, forms[provider]);
       setMessages((m) => ({ ...m, [provider]: "Credenciales guardadas y cifradas correctamente." }));
       load();
     } catch (err) {
