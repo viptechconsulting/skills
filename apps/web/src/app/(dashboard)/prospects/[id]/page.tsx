@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { api, ApiError } from "@/lib/apiClient";
 
@@ -53,6 +53,7 @@ interface CampaignOption {
 
 export default function ProspectDetailPage() {
   const params = useParams<{ id: string }>();
+  const router = useRouter();
   const [prospect, setProspect] = useState<Prospect | null>(null);
   const [calls, setCalls] = useState<CallSummary[]>([]);
   const [campaigns, setCampaigns] = useState<CampaignOption[]>([]);
@@ -94,6 +95,24 @@ export default function ProspectDetailPage() {
     return humanReason ?? err.message;
   }
 
+  async function handleDelete() {
+    if (!prospect) return;
+    if (!window.confirm(`¿Eliminar a "${prospect.name}" definitivamente? Esta acción no se puede deshacer.`)) return;
+    setError(null);
+    try {
+      await api.delete(`/prospects/${prospect.id}`);
+      router.push("/prospects");
+    } catch (err) {
+      if (err instanceof ApiError && err.status === 409) {
+        setError(
+          "No se puede eliminar: este prospecto ya tiene llamadas o citas registradas. Usa \"Bloquear comunicaciones\" en su lugar para preservar el historial.",
+        );
+      } else {
+        setError(err instanceof ApiError ? err.message : "Error al eliminar el prospecto");
+      }
+    }
+  }
+
   if (!prospect) return <p className="text-sm text-slate-500">Cargando...</p>;
 
   return (
@@ -131,6 +150,9 @@ export default function ProspectDetailPage() {
           }
         >
           Bloquear comunicaciones
+        </button>
+        <button className="btn-danger" onClick={handleDelete}>
+          Eliminar prospecto
         </button>
       </div>
 

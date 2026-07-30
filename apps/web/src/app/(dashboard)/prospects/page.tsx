@@ -19,6 +19,7 @@ export default function ProspectsPage() {
   const [prospects, setProspects] = useState<Prospect[] | null>(null);
   const [importResult, setImportResult] = useState<string | null>(null);
   const [importError, setImportError] = useState<string | null>(null);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   async function load() {
@@ -52,6 +53,23 @@ export default function ProspectsPage() {
     }
   }
 
+  async function handleDelete(prospect: Prospect) {
+    if (!window.confirm(`¿Eliminar a "${prospect.name}" definitivamente? Esta acción no se puede deshacer.`)) return;
+    setDeleteError(null);
+    try {
+      await api.delete(`/prospects/${prospect.id}`);
+      load();
+    } catch (err) {
+      if (err instanceof ApiError && err.status === 409) {
+        setDeleteError(
+          `No se puede eliminar a "${prospect.name}": ya tiene llamadas o citas registradas. Usa "Bloquear comunicaciones" en su detalle para preservar el historial.`,
+        );
+      } else {
+        setDeleteError(err instanceof ApiError ? err.message : "Error al eliminar el prospecto");
+      }
+    }
+  }
+
   return (
     <div>
       <div className="mb-6 flex items-center justify-between">
@@ -69,6 +87,7 @@ export default function ProspectsPage() {
 
       {importResult && <p className="mb-4 text-sm text-emerald-600">{importResult}</p>}
       {importError && <p className="mb-4 text-sm text-red-600">{importError}</p>}
+      {deleteError && <p className="mb-4 text-sm text-red-600">{deleteError}</p>}
 
       <div className="card overflow-x-auto">
         <table className="table-base">
@@ -96,10 +115,16 @@ export default function ProspectsPage() {
                 <td>{p.attemptCount}</td>
                 <td>{p.nextAttemptAt ? new Date(p.nextAttemptAt).toLocaleString() : "—"}</td>
                 <td>{p.finalOutcome ?? "—"}</td>
-                <td>
+                <td className="whitespace-nowrap">
                   <Link href={`/prospects/${p.id}`} className="text-brand-600 hover:underline">
                     Ver
                   </Link>
+                  <button
+                    className="ml-3 text-red-600 hover:underline"
+                    onClick={() => handleDelete(p)}
+                  >
+                    Eliminar
+                  </button>
                 </td>
               </tr>
             ))}

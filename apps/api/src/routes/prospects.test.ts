@@ -169,4 +169,77 @@ describe("prospect routes: elegibilidad y acciones", () => {
     expect(second.statusCode).toBe(409);
     expect(second.json().error).toBe("DUPLICATE_PROSPECT");
   });
+
+  it("elimina un prospecto sin historial de llamadas", async () => {
+    const { cookie } = await registerAndGetCookie("delete-ok@test.com");
+    const created = await app.inject({
+      method: "POST",
+      url: "/prospects",
+      headers: { cookie },
+      payload: {
+        name: "Prospecto a borrar",
+        phone: "+14155559944",
+        language: "es",
+        timezone: "America/Bogota",
+        intent: "test",
+        desiredOutcome: "test",
+        source: "test",
+        consentGiven: true,
+      },
+    });
+    const prospectId = created.json().prospect.id;
+
+    const deleteResponse = await app.inject({ method: "DELETE", url: `/prospects/${prospectId}`, headers: { cookie } });
+    expect(deleteResponse.statusCode).toBe(200);
+
+    const getResponse = await app.inject({ method: "GET", url: `/prospects/${prospectId}`, headers: { cookie } });
+    expect(getResponse.statusCode).toBe(404);
+  });
+
+  it("rechaza eliminar un prospecto que ya tiene llamadas registradas", async () => {
+    const { cookie, organizationId } = await registerAndGetCookie("delete-blocked@test.com");
+    const { phoneNumber, voiceAgent } = await createPhoneAndAgent(organizationId);
+    const campaign = await prisma.campaign.create({
+      data: {
+        organizationId,
+        name: "Campaña con historial",
+        objective: "Objetivo",
+        timezoneDefault: "America/Bogota",
+        outboundPhoneNumberId: phoneNumber.id,
+        voiceAgentId: voiceAgent.id,
+        agentInstructions: "Instrucciones",
+        status: "active",
+      },
+    });
+    const prospect = await prisma.prospect.create({
+      data: {
+        organizationId,
+        campaignId: campaign.id,
+        name: "Prospecto con historial",
+        phoneE164: "+14155559955",
+        timezone: "America/Bogota",
+        intent: "test",
+        desiredOutcome: "test",
+        source: "test",
+        status: "completed",
+      },
+    });
+    await prisma.call.create({
+      data: {
+        organizationId,
+        campaignId: campaign.id,
+        prospectId: prospect.id,
+        phoneNumberId: phoneNumber.id,
+        status: "completed",
+        attemptNumber: 1,
+      },
+    });
+
+    const deleteResponse = await app.inject({ method: "DELETE", url: `/prospects/${prospect.id}`, headers: { cookie } });
+    expect(deleteResponse.statusCode).toBe(409);
+    expect(deleteResponse.json().error).toBe("PROSPECT_HAS_CALL_HISTORY");
+
+    const stillThere = await prisma.prospect.findUnique({ where: { id: prospect.id } });
+    expect(stillThere).not.toBeNull();
+  });
 });

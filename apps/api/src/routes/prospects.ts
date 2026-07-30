@@ -1,6 +1,6 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
-import { prisma, recordAuditLog } from "@lynkro-outbound/db";
+import { Prisma, prisma, recordAuditLog } from "@lynkro-outbound/db";
 import {
   createProspectSchema,
   normalizePhoneToE164,
@@ -230,6 +230,35 @@ export async function prospectRoutes(fastify: FastifyInstance): Promise<void> {
       entityType: "prospect",
       entityId: id,
       action: "block",
+    });
+
+    return reply.send({ ok: true });
+  });
+
+  fastify.delete("/prospects/:id", { preHandler: fastify.requireRole(["owner", "admin"]) }, async (request, reply) => {
+    const organizationId = request.auth!.organizationId;
+    const { id } = request.params as { id: string };
+    const prospect = await prisma.prospect.findFirst({ where: { id, organizationId } });
+    if (!prospect) return reply.code(404).send({ error: "PROSPECT_NOT_FOUND" });
+
+    try {
+      await prisma.prospect.delete({ where: { id } });
+    } catch (error) {
+      // El prospecto tiene llamadas o citas asociadas (ON DELETE RESTRICT):
+      // preservamos ese historial a propósito en vez de borrarlo en cascada.
+      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2003") {
+        return reply.code(409).send({ error: "PROSPECT_HAS_CALL_HISTORY" });
+      }
+      throw error;
+    }
+
+    await recordAuditLog(prisma, {
+      organizationId,
+      actorUserId: request.auth!.userId,
+      entityType: "prospect",
+      entityId: id,
+      action: "delete",
+      before: prospect as never,
     });
 
     return reply.send({ ok: true });
