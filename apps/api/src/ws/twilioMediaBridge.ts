@@ -85,6 +85,39 @@ export function registerTwilioMediaBridge(app: FastifyInstance): void {
       }
     }
 
+    // Se registran ANTES de cualquier `await`: Twilio manda "connected" y
+    // "start" (con el streamSid) apenas se abre el WebSocket, sin esperar a
+    // que termine el setup de la sesión de IA (que incluye un round-trip de
+    // red a OpenAI). Si el listener se registra después de esos awaits, esos
+    // mensajes ya se emitieron y se pierden para siempre — streamSid nunca
+    // se llega a asignar y ningún audio de salida se puede reenviar a Twilio.
+    socket.on("message", (raw: Buffer) => {
+      let message: TwilioMediaMessage;
+      try {
+        message = JSON.parse(raw.toString());
+      } catch {
+        return;
+      }
+
+      if (message.event === "start" && message.start) {
+        streamSid = message.streamSid ?? null;
+        logger.info({ callId, streamSid }, "twilio_stream_started");
+      } else if (message.event === "media" && message.media) {
+        aiSession?.sendAudioChunk(message.media.payload);
+      } else if (message.event === "stop") {
+        void cleanup("twilio_stream_stopped");
+      }
+    });
+
+    socket.on("close", () => {
+      void cleanup("socket_closed");
+    });
+
+    socket.on("error", (error: Error) => {
+      logger.error({ err: error.message, callId }, "twilio_media_socket_error");
+      void cleanup("socket_error");
+    });
+
     try {
       const call = await prisma.call.findUnique({ where: { id: callId } });
       if (!call) {
@@ -141,7 +174,6 @@ export function registerTwilioMediaBridge(app: FastifyInstance): void {
 
       await aiSession.start({
         onAudioChunk: (base64Audio) => {
-          logger.info({ callId, hasStreamSid: Boolean(streamSid), closed, bytes: base64Audio.length }, "realtime_audio_chunk_received");
           if (!streamSid || closed) return;
           socket.send(
             JSON.stringify({ event: "media", streamSid, media: { payload: base64Audio } }),
@@ -189,33 +221,6 @@ export function registerTwilioMediaBridge(app: FastifyInstance): void {
       durationTimer = setTimeout(() => {
         void cleanup("max_duration_reached");
       }, MAX_CALL_DURATION_MS);
-
-      socket.on("message", (raw: Buffer) => {
-        let message: TwilioMediaMessage;
-        try {
-          message = JSON.parse(raw.toString());
-        } catch {
-          return;
-        }
-
-        if (message.event === "start" && message.start) {
-          streamSid = message.streamSid ?? null;
-          logger.info({ callId, streamSid }, "twilio_stream_started");
-        } else if (message.event === "media" && message.media) {
-          aiSession?.sendAudioChunk(message.media.payload);
-        } else if (message.event === "stop") {
-          void cleanup("twilio_stream_stopped");
-        }
-      });
-
-      socket.on("close", () => {
-        void cleanup("socket_closed");
-      });
-
-      socket.on("error", (error: Error) => {
-        logger.error({ err: error.message, callId }, "twilio_media_socket_error");
-        void cleanup("socket_error");
-      });
     } catch (error) {
       logger.error({ err: (error as Error).message, callId }, "media_bridge_setup_failed");
       await cleanup("setup_failed");

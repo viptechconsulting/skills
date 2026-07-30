@@ -126,13 +126,6 @@ class OpenAIRealtimeSession implements RealtimeSession {
       return;
     }
 
-    // Log temporal de diagnóstico: ver el flujo real de eventos del servidor
-    // para diagnosticar por qué no llega audio a Twilio.
-    console.log(
-      `[realtime_debug] type=${String(event.type)}` +
-        (event.type === "error" ? ` error=${JSON.stringify(event.error)}` : ""),
-    );
-
     switch (event.type) {
       // La API GA renombró estos dos eventos (antes "response.audio.delta" /
       // "response.audio_transcript.delta" en Beta); se aceptan ambos nombres
