@@ -1,0 +1,15 @@
+# Copiá este archivo a Caddyfile (sin ".example") y reemplazá los dominios.
+# Caddy obtiene y renueva certificados HTTPS automáticamente (Let's Encrypt)
+# apenas el dominio resuelve a la IP del VPS y los puertos 80/443 están
+# abiertos — no hay que configurar nada más para HTTPS.
+#
+# reverse_proxy soporta WebSockets (wss://) sin configuración extra, que es
+# lo que necesita /ws/twilio-media para el Media Stream de Twilio.
+
+app.tudominio.com {
+	reverse_proxy web:3000
+}
+
+api.tudominio.com {
+	reverse_proxy api:4000
+}

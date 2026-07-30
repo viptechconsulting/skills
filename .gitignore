@@ -8,6 +8,8 @@ coverage/
 .env
 .env.local
 .env.*.local
+# Generado a partir de Caddyfile.example con los dominios reales del VPS
+Caddyfile
 .DS_Store
 *.tsbuildinfo
 .turbo/

@@ -1,0 +1,58 @@
+# Overlay de producción para VPS. Se usa JUNTO con docker-compose.yml, nunca
+# solo:
+#
+#   docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build
+#
+# Qué cambia respecto al docker-compose.yml de desarrollo:
+#   - Postgres y Redis dejan de exponer su puerto al host/internet (en dev se
+#     exponen para poder correr `psql`/`redis-cli` desde la Mac del
+#     desarrollador; en un VPS eso deja la base de datos alcanzable desde
+#     internet con la contraseña por defecto "lynkro").
+#   - La contraseña de Postgres pasa a ser la que definas en POSTGRES_PASSWORD
+#     (.env), no el valor fijo "lynkro" del compose de desarrollo.
+#   - api y web dejan de exponer sus puertos directo al host: el único punto
+#     de entrada público es Caddy, que sirve HTTPS real (Let's Encrypt
+#     automático) y hace de reverse proxy — Twilio Media Streams exige un
+#     WebSocket seguro (wss://), igual que en local con ngrok.
+name: lynkro-outbound
+
+services:
+  postgres:
+    ports: !reset []
+    environment:
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Definí POSTGRES_PASSWORD en .env}
+
+  redis:
+    ports: !reset []
+
+  api:
+    ports: !reset []
+    environment:
+      DATABASE_URL: postgresql://lynkro:${POSTGRES_PASSWORD:?Definí POSTGRES_PASSWORD en .env}@postgres:5432/lynkro_outbound
+      DIRECT_URL: postgresql://lynkro:${POSTGRES_PASSWORD:?Definí POSTGRES_PASSWORD en .env}@postgres:5432/lynkro_outbound
+
+  worker:
+    environment:
+      DATABASE_URL: postgresql://lynkro:${POSTGRES_PASSWORD:?Definí POSTGRES_PASSWORD en .env}@postgres:5432/lynkro_outbound
+      DIRECT_URL: postgresql://lynkro:${POSTGRES_PASSWORD:?Definí POSTGRES_PASSWORD en .env}@postgres:5432/lynkro_outbound
+
+  web:
+    ports: !reset []
+
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - lynkro_caddy_data:/data
+      - lynkro_caddy_config:/config
+    depends_on:
+      - api
+      - web
+
+volumes:
+  lynkro_caddy_data:
+  lynkro_caddy_config:

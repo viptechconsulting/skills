@@ -216,24 +216,53 @@ paquetes internos consumidos como fuente TS.
 > `docker compose config`, pero **el build real debe validarse en un entorno
 > con Docker** antes de un despliegue productivo.
 
-### Despliegue rápido en un VPS
+### Despliegue en un VPS (producción, con llamadas reales)
 
-`NEXT_PUBLIC_API_BASE_URL` se incrusta en el build de Next.js y es la URL
-que el **navegador** usará para llamar a la API — en un VPS debe ser la
-IP pública o dominio, nunca `localhost`. `docker-compose.yml` la toma del
-`.env` de la raíz vía sustitución de variables de Docker Compose
-(`${NEXT_PUBLIC_API_BASE_URL:-http://localhost:4000}`). Antes de
-`docker compose up`, asegúrate de que `.env` tenga:
+El `docker-compose.yml` base está pensado para desarrollo local: expone
+Postgres/Redis directo al host (para poder correr `psql`/`redis-cli` desde
+tu máquina) con la contraseña fija `lynkro`, y no sirve HTTPS. Ninguna de
+las dos cosas es aceptable en un VPS: Postgres/Redis quedarían alcanzables
+desde internet con una contraseña conocida, y Twilio Media Streams exige un
+WebSocket seguro (`wss://`), igual que el túnel HTTPS de ngrok que usás en
+local.
 
-```bash
-NEXT_PUBLIC_API_BASE_URL=http://<IP_PUBLICA_O_DOMINIO>:3000  # ⚠️ debe ser :4000 (puerto de la API)
-CORS_ALLOWED_ORIGINS=http://<IP_PUBLICA_O_DOMINIO>:3000
-```
+`docker-compose.prod.yml` es un overlay que corrige ambas cosas: quita la
+exposición pública de Postgres/Redis/api/web (solo Caddy queda expuesto) y
+agrega Caddy como reverse proxy con HTTPS automático (Let's Encrypt) — se
+usa **junto con** el compose base, nunca solo.
 
-y que los puertos 3000/4000 estén abiertos en el firewall del VPS (y en el
-firewall del panel de tu proveedor, si aplica). Con eso, `pnpm docker:build && pnpm docker:up`
-deja el panel accesible en `http://<IP_PUBLICA>:3000` en modo simulación,
-sin necesidad de credenciales reales de Twilio/OpenAI/GHL.
+1. Provisioná un VPS (cualquier proveedor) con Docker y el plugin Compose
+   instalados, y cloná este repo ahí.
+2. Apuntá dos subdominios a la IP pública del VPS (registro DNS tipo A),
+   por ejemplo `app.tudominio.com` y `api.tudominio.com`.
+3. Copiá `Caddyfile.example` a `Caddyfile` y reemplazá esos dos dominios.
+4. Completá `.env` (a partir de `.env.example`) con, como mínimo:
+   ```bash
+   POSTGRES_PASSWORD=$(openssl rand -hex 24)   # nunca "lynkro" en producción
+   NEXT_PUBLIC_API_BASE_URL=https://api.tudominio.com
+   API_BASE_URL=https://api.tudominio.com
+   APP_BASE_URL=https://app.tudominio.com
+   CORS_ALLOWED_ORIGINS=https://app.tudominio.com
+   TWILIO_WEBHOOK_BASE_URL=https://api.tudominio.com
+   SIMULATION_MODE=false
+   ```
+   más las credenciales reales de Twilio/OpenAI (pueden completarse después
+   desde `/integrations` en el panel, en vez de por variable de entorno).
+5. Asegurate de que el firewall del VPS (y el del panel del proveedor, si
+   aplica) solo tenga abiertos los puertos **80 y 443** — no 3000/4000/5432/6379.
+6. Levantalo con el overlay de producción:
+   ```bash
+   docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build
+   docker compose exec api pnpm --filter @lynkro-outbound/db exec prisma migrate deploy
+   ```
+7. El panel queda en `https://app.tudominio.com` y los webhooks de Twilio
+   apuntan a `https://api.tudominio.com` — sin depender de que ninguna
+   computadora quede prendida.
+
+Para actualizar el código más adelante: `git pull`, y repetir el paso 6
+(`up -d --build`) — las migraciones (`prisma migrate deploy`) son
+idempotentes, correrlas de nuevo no rompe nada si no hay migraciones
+nuevas.
 
 ## Primera llamada de prueba end-to-end
 
