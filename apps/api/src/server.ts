@@ -6,6 +6,7 @@ import { env } from "./config.js";
 import securityPlugin from "./plugins/security.js";
 import authPlugin from "./plugins/auth.js";
 import { authRoutes } from "./routes/auth.js";
+import { organizationRoutes } from "./routes/organization.js";
 import { campaignRoutes } from "./routes/campaigns.js";
 import { prospectRoutes } from "./routes/prospects.js";
 import { callRoutes } from "./routes/calls.js";
@@ -48,6 +49,7 @@ export async function buildServer(): Promise<FastifyInstance> {
   app.get("/health", async () => ({ ok: true, service: "lynkro-outbound-api" }));
 
   await app.register(authRoutes);
+  await app.register(organizationRoutes);
   await app.register(campaignRoutes);
   await app.register(prospectRoutes);
   await app.register(callRoutes);

@@ -54,6 +54,11 @@ export async function seedOrganizationFixture(db: PrismaClient, label: string): 
       name: `Campaña ${label}`,
       objective: "Objetivo de prueba",
       timezoneDefault: "America/Bogota",
+      // Ventana de 24h (ver isWithinAllowedWindow: start === end => siempre
+      // permitido) para que las pruebas de elegibilidad/despacho no sean
+      // intermitentes según la hora del día en que se ejecuten.
+      allowedWindowStart: "00:00",
+      allowedWindowEnd: "00:00",
       outboundPhoneNumberId: phoneNumber.id,
       voiceAgentId: voiceAgent.id,
       agentInstructions: "Instrucciones de prueba",

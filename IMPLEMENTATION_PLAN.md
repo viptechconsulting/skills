@@ -174,6 +174,8 @@ Reglas:
 
 Auth: `POST /auth/register`, `POST /auth/login`, `POST /auth/logout`, `GET /auth/me`
 
+Organización: `GET/PATCH /organization` (nombre, zona horaria, modo simulación y consentimiento por defecto), `GET/POST /organization/users`, `PATCH /organization/users/:id` (rol/activo) — gestión de equipo y configuraciones generales.
+
 Campañas: `GET/POST /campaigns`, `GET/PATCH/DELETE /campaigns/:id`
 
 Prospectos: `GET/POST /prospects`, `POST /prospects/import` (CSV), `GET/PATCH /prospects/:id`, `POST /prospects/:id/call-now`, `POST /prospects/:id/schedule`, `POST /prospects/:id/cancel`, `POST /prospects/:id/retry`, `GET /prospects/:id/history`, `POST /prospects/:id/block`

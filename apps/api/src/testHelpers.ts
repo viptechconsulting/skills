@@ -49,6 +49,10 @@ export async function seedOrgWithCampaign(label: string) {
       name: `Campaña ${label}`,
       objective: "Objetivo de prueba",
       timezoneDefault: "America/Bogota",
+      // Ventana de 24h para que las pruebas no dependan de la hora del día
+      // en que se ejecuten (ver isWithinAllowedWindow: start === end => siempre permitido).
+      allowedWindowStart: "00:00",
+      allowedWindowEnd: "00:00",
       outboundPhoneNumberId: phoneNumber.id,
       voiceAgentId: voiceAgent.id,
       agentInstructions: "Instrucciones de prueba",

@@ -29,3 +29,18 @@ export const inviteUserSchema = z.object({
   role: z.enum(USER_ROLES),
 });
 export type InviteUserInput = z.infer<typeof inviteUserSchema>;
+
+export const createTeamMemberSchema = z.object({
+  email: z.string().email(),
+  password: passwordSchema,
+  role: z.enum(USER_ROLES),
+});
+export type CreateTeamMemberInput = z.infer<typeof createTeamMemberSchema>;
+
+export const updateOrganizationSettingsSchema = z.object({
+  name: z.string().min(1).max(150).optional(),
+  timezoneDefault: z.string().min(1).optional(),
+  simulationMode: z.boolean().optional(),
+  consentRequired: z.boolean().optional(),
+});
+export type UpdateOrganizationSettingsInput = z.infer<typeof updateOrganizationSettingsSchema>;

@@ -14,6 +14,7 @@ const NAV_ITEMS = [
   { href: "/phone-numbers", label: "Números" },
   { href: "/voice-agents", label: "Agentes de voz" },
   { href: "/integrations", label: "Integraciones" },
+  { href: "/settings", label: "Configuraciones" },
 ];
 
 export function Nav({ user }: { user: CurrentUser | null }) {
