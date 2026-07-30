@@ -112,6 +112,8 @@ export async function campaignRoutes(fastify: FastifyInstance): Promise<void> {
           ? { attemptIntervalMinutes: data.attemptIntervalMinutes }
           : {}),
         ...(data.targetCalendarId !== undefined ? { targetCalendarId: data.targetCalendarId } : {}),
+        ...(data.outboundPhoneNumberId !== undefined ? { outboundPhoneNumberId: data.outboundPhoneNumberId } : {}),
+        ...(data.voiceAgentId !== undefined ? { voiceAgentId: data.voiceAgentId } : {}),
         ...(data.agentInstructions !== undefined ? { agentInstructions: data.agentInstructions } : {}),
         ...(data.qualificationQuestions !== undefined
           ? { qualificationQuestions: data.qualificationQuestions }
