@@ -26,6 +26,7 @@ class OpenAIRealtimeSession implements RealtimeSession {
   private closed = false;
   private lastServerActivityAt = Date.now();
   private heartbeatTimer: ReturnType<typeof setInterval> | null = null;
+  private hasActiveResponse = false;
 
   constructor(
     private readonly apiConfig: OpenAIRealtimeConfig,
@@ -135,6 +136,14 @@ class OpenAIRealtimeSession implements RealtimeSession {
         if (delta) this.events?.onTranscriptDelta("agent", delta);
         break;
       }
+      case "response.created": {
+        this.hasActiveResponse = true;
+        break;
+      }
+      case "response.done": {
+        this.hasActiveResponse = false;
+        break;
+      }
       case "conversation.item.input_audio_transcription.completed": {
         const transcript = event.transcript as string | undefined;
         if (transcript) this.events?.onTranscriptDelta("prospect", transcript);
@@ -155,6 +164,14 @@ class OpenAIRealtimeSession implements RealtimeSession {
       }
       case "error": {
         const message = (event.error as { message?: string } | undefined)?.message ?? "OpenAI Realtime error";
+        // Benigno: puede ocurrir si el prospecto habla justo cuando el
+        // modelo todavía no había empezado a responder (o ya había
+        // terminado) y de todos modos mandamos response.cancel al detectar
+        // el barge-in. No corresponde cerrar la llamada por esto.
+        if (message.includes("Cancellation failed")) {
+          this.hasActiveResponse = false;
+          break;
+        }
         this.events?.onError(new Error(message));
         break;
       }
@@ -168,6 +185,12 @@ class OpenAIRealtimeSession implements RealtimeSession {
   }
 
   cancelCurrentResponse(): void {
+    // OpenAI rechaza response.cancel con un error ("Cancellation failed: no
+    // active response found") cuando no hay una respuesta en curso — pasa
+    // seguido si el prospecto habla apenas atiende, antes de que el modelo
+    // haya llegado a iniciar su respuesta.
+    if (!this.hasActiveResponse) return;
+    this.hasActiveResponse = false;
     this.send({ type: "response.cancel" });
   }
 
