@@ -211,10 +211,29 @@ paquetes internos consumidos como fuente TS.
 
 > Nota: los `Dockerfile` de este proyecto no pudieron construirse ni
 > ejecutarse dentro de este entorno de desarrollo (no había un daemon de
-> Docker disponible en la sandbox donde se construyó este MVP). Están escritos
-> siguiendo las convenciones estándar de pnpm + Next.js standalone, pero
-> **deben validarse con un `docker compose build` real** antes de un despliegue
-> productivo.
+> Docker disponible en la sandbox donde se construyó este MVP). La sintaxis y
+> las variables de `docker-compose.yml` sí se validaron con
+> `docker compose config`, pero **el build real debe validarse en un entorno
+> con Docker** antes de un despliegue productivo.
+
+### Despliegue rápido en un VPS
+
+`NEXT_PUBLIC_API_BASE_URL` se incrusta en el build de Next.js y es la URL
+que el **navegador** usará para llamar a la API — en un VPS debe ser la
+IP pública o dominio, nunca `localhost`. `docker-compose.yml` la toma del
+`.env` de la raíz vía sustitución de variables de Docker Compose
+(`${NEXT_PUBLIC_API_BASE_URL:-http://localhost:4000}`). Antes de
+`docker compose up`, asegúrate de que `.env` tenga:
+
+```bash
+NEXT_PUBLIC_API_BASE_URL=http://<IP_PUBLICA_O_DOMINIO>:3000  # ⚠️ debe ser :4000 (puerto de la API)
+CORS_ALLOWED_ORIGINS=http://<IP_PUBLICA_O_DOMINIO>:3000
+```
+
+y que los puertos 3000/4000 estén abiertos en el firewall del VPS (y en el
+firewall del panel de tu proveedor, si aplica). Con eso, `pnpm docker:build && pnpm docker:up`
+deja el panel accesible en `http://<IP_PUBLICA>:3000` en modo simulación,
+sin necesidad de credenciales reales de Twilio/OpenAI/GHL.
 
 ## Primera llamada de prueba end-to-end
 
