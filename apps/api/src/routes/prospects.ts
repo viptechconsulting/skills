@@ -115,7 +115,26 @@ export async function prospectRoutes(fastify: FastifyInstance): Promise<void> {
     if (!parsed.success) {
       return reply.code(400).send({ error: "VALIDATION_ERROR", details: parsed.error.issues });
     }
-    const updated = await prisma.prospect.updateMany({ where: { id, organizationId }, data: parsed.data as never });
+    // `phone`/`defaultCountry` son campos de entrada (crudos); la columna real
+    // es `phoneE164`, normalizada igual que en la creación del prospecto.
+    const { phone, defaultCountry, ...rest } = parsed.data;
+    const data: Record<string, unknown> = { ...rest };
+
+    if (phone !== undefined) {
+      const normalized = normalizePhoneToE164(phone, defaultCountry as never);
+      if (!normalized.ok || !normalized.e164) {
+        return reply.code(400).send({ error: "INVALID_PHONE_NUMBER", reason: normalized.reason });
+      }
+      const existing = await prisma.prospect.findFirst({
+        where: { organizationId, phoneE164: normalized.e164, id: { not: id } },
+      });
+      if (existing) {
+        return reply.code(409).send({ error: "DUPLICATE_PROSPECT", prospectId: existing.id });
+      }
+      data.phoneE164 = normalized.e164;
+    }
+
+    const updated = await prisma.prospect.updateMany({ where: { id, organizationId }, data: data as never });
     if (updated.count === 0) return reply.code(404).send({ error: "PROSPECT_NOT_FOUND" });
     const prospect = await prisma.prospect.findFirst({ where: { id, organizationId } });
     return reply.send({ prospect });

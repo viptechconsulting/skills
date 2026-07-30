@@ -26,6 +26,7 @@ interface Prospect {
   name: string;
   phoneE164: string;
   company: string;
+  email: string | null;
   status: string;
   attemptCount: number;
   nextAttemptAt: string | null;
@@ -35,6 +36,28 @@ interface Prospect {
   desiredOutcome: string;
   context: string;
   campaignId: string | null;
+}
+
+interface ProspectEditForm {
+  name: string;
+  phone: string;
+  company: string;
+  email: string;
+  intent: string;
+  desiredOutcome: string;
+  context: string;
+}
+
+function toEditForm(prospect: Prospect): ProspectEditForm {
+  return {
+    name: prospect.name,
+    phone: prospect.phoneE164,
+    company: prospect.company,
+    email: prospect.email ?? "",
+    intent: prospect.intent,
+    desiredOutcome: prospect.desiredOutcome,
+    context: prospect.context,
+  };
 }
 
 interface CallSummary {
@@ -58,6 +81,7 @@ export default function ProspectDetailPage() {
   const [calls, setCalls] = useState<CallSummary[]>([]);
   const [campaigns, setCampaigns] = useState<CampaignOption[]>([]);
   const [selectedCampaignId, setSelectedCampaignId] = useState("");
+  const [editForm, setEditForm] = useState<ProspectEditForm | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [scheduleAt, setScheduleAt] = useState("");
@@ -66,6 +90,7 @@ export default function ProspectDetailPage() {
     const { prospect } = await api.get<{ prospect: Prospect }>(`/prospects/${params.id}`);
     setProspect(prospect);
     setSelectedCampaignId(prospect.campaignId ?? "");
+    setEditForm(toEditForm(prospect));
     const { calls } = await api.get<{ calls: CallSummary[] }>(`/prospects/${params.id}/history`);
     setCalls(calls);
     const { campaigns } = await api.get<{ campaigns: CampaignOption[] }>("/campaigns");
@@ -93,6 +118,23 @@ export default function ProspectDetailPage() {
     const reason = typeof err.body === "object" && err.body && "reason" in err.body ? (err.body as { reason: unknown }).reason : undefined;
     const humanReason = typeof reason === "string" ? ELIGIBILITY_REJECTION_MESSAGES[reason] : undefined;
     return humanReason ?? err.message;
+  }
+
+  async function handleSaveEdit() {
+    if (!editForm) return;
+    await runAction(
+      () =>
+        api.patch(`/prospects/${params.id}`, {
+          name: editForm.name,
+          phone: editForm.phone,
+          company: editForm.company,
+          email: editForm.email || undefined,
+          intent: editForm.intent,
+          desiredOutcome: editForm.desiredOutcome,
+          context: editForm.context,
+        }),
+      "Información del prospecto actualizada",
+    );
   }
 
   async function handleDelete() {
@@ -155,6 +197,81 @@ export default function ProspectDetailPage() {
           Eliminar prospecto
         </button>
       </div>
+
+      {editForm && (
+        <div className="card mb-6">
+          <h2 className="mb-3 font-semibold">Información del prospecto</h2>
+          <div className="grid gap-3 md:grid-cols-2">
+            <div>
+              <label className="label" htmlFor="p-edit-name">Nombre</label>
+              <input
+                id="p-edit-name"
+                className="input"
+                value={editForm.name}
+                onChange={(e) => setEditForm((f) => (f ? { ...f, name: e.target.value } : f))}
+              />
+            </div>
+            <div>
+              <label className="label" htmlFor="p-edit-phone">Teléfono</label>
+              <input
+                id="p-edit-phone"
+                className="input"
+                value={editForm.phone}
+                onChange={(e) => setEditForm((f) => (f ? { ...f, phone: e.target.value } : f))}
+              />
+            </div>
+            <div>
+              <label className="label" htmlFor="p-edit-company">Empresa</label>
+              <input
+                id="p-edit-company"
+                className="input"
+                value={editForm.company}
+                onChange={(e) => setEditForm((f) => (f ? { ...f, company: e.target.value } : f))}
+              />
+            </div>
+            <div>
+              <label className="label" htmlFor="p-edit-email">Email</label>
+              <input
+                id="p-edit-email"
+                type="email"
+                className="input"
+                value={editForm.email}
+                onChange={(e) => setEditForm((f) => (f ? { ...f, email: e.target.value } : f))}
+              />
+            </div>
+          </div>
+          <div className="mt-3">
+            <label className="label" htmlFor="p-edit-intent">Intención exacta de la llamada</label>
+            <textarea
+              id="p-edit-intent"
+              className="input"
+              value={editForm.intent}
+              onChange={(e) => setEditForm((f) => (f ? { ...f, intent: e.target.value } : f))}
+            />
+          </div>
+          <div className="mt-3">
+            <label className="label" htmlFor="p-edit-outcome">Resultado deseado</label>
+            <textarea
+              id="p-edit-outcome"
+              className="input"
+              value={editForm.desiredOutcome}
+              onChange={(e) => setEditForm((f) => (f ? { ...f, desiredOutcome: e.target.value } : f))}
+            />
+          </div>
+          <div className="mt-3">
+            <label className="label" htmlFor="p-edit-context">Contexto previo</label>
+            <textarea
+              id="p-edit-context"
+              className="input"
+              value={editForm.context}
+              onChange={(e) => setEditForm((f) => (f ? { ...f, context: e.target.value } : f))}
+            />
+          </div>
+          <button className="btn-primary mt-3" onClick={handleSaveEdit}>
+            Guardar cambios
+          </button>
+        </div>
+      )}
 
       <div className="card mb-6">
         <h2 className="mb-3 font-semibold">Campaña asignada</h2>

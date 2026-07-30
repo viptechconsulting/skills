@@ -170,6 +170,39 @@ describe("prospect routes: elegibilidad y acciones", () => {
     expect(second.json().error).toBe("DUPLICATE_PROSPECT");
   });
 
+  it("permite editar name/phone/company vía PATCH normalizando el teléfono a E.164", async () => {
+    const { cookie } = await registerAndGetCookie("edit-ok@test.com");
+    const created = await app.inject({
+      method: "POST",
+      url: "/prospects",
+      headers: { cookie },
+      payload: {
+        name: "Nombre original",
+        phone: "+14155559966",
+        language: "es",
+        timezone: "America/Bogota",
+        intent: "test",
+        desiredOutcome: "test",
+        source: "test",
+        consentGiven: true,
+      },
+    });
+    const prospectId = created.json().prospect.id;
+
+    const editResponse = await app.inject({
+      method: "PATCH",
+      url: `/prospects/${prospectId}`,
+      headers: { cookie },
+      payload: { name: "Nombre editado", phone: "+14155559977", company: "Acme" },
+    });
+
+    expect(editResponse.statusCode).toBe(200);
+    const updated = editResponse.json().prospect;
+    expect(updated.name).toBe("Nombre editado");
+    expect(updated.phoneE164).toBe("+14155559977");
+    expect(updated.company).toBe("Acme");
+  });
+
   it("elimina un prospecto sin historial de llamadas", async () => {
     const { cookie } = await registerAndGetCookie("delete-ok@test.com");
     const created = await app.inject({
