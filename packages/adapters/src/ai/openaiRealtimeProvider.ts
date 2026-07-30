@@ -15,6 +15,11 @@ export interface OpenAIRealtimeConfig {
 
 const REALTIME_BASE_URL = "wss://api.openai.com/v1/realtime";
 
+/** Mapea nuestros nombres de formato de audio al esquema de la API GA (session.audio.*.format). */
+function toGaAudioFormat(format: "g711_ulaw" | "pcm16"): { type: string } {
+  return { type: format === "g711_ulaw" ? "audio/pcmu" : "audio/pcm" };
+}
+
 class OpenAIRealtimeSession implements RealtimeSession {
   private ws: WebSocket | null = null;
   private events: RealtimeSessionEvents | null = null;
@@ -69,20 +74,31 @@ class OpenAIRealtimeSession implements RealtimeSession {
   }
 
   private sendSessionUpdate(): void {
+    // Esquema de la API GA (distinto del Beta): requiere session.type,
+    // "output_modalities" en vez de "modalities", y el audio anidado bajo
+    // session.audio.input/session.audio.output en vez de campos planos
+    // input_audio_format/output_audio_format/voice/turn_detection.
     this.send({
       type: "session.update",
       session: {
-        modalities: ["audio", "text"],
+        type: "realtime",
+        output_modalities: ["audio"],
         instructions: this.sessionConfig.systemPrompt,
-        voice: this.sessionConfig.voice,
-        input_audio_format: this.sessionConfig.inputAudioFormat,
-        output_audio_format: this.sessionConfig.outputAudioFormat,
-        input_audio_transcription: { model: "whisper-1" },
-        turn_detection: {
-          type: "server_vad",
-          threshold: 0.5,
-          prefix_padding_ms: 300,
-          silence_duration_ms: 500,
+        audio: {
+          input: {
+            format: toGaAudioFormat(this.sessionConfig.inputAudioFormat),
+            turn_detection: {
+              type: "server_vad",
+              threshold: 0.5,
+              prefix_padding_ms: 300,
+              silence_duration_ms: 500,
+            },
+            transcription: { model: "whisper-1" },
+          },
+          output: {
+            format: toGaAudioFormat(this.sessionConfig.outputAudioFormat),
+            voice: this.sessionConfig.voice,
+          },
         },
         tools: this.sessionConfig.tools.map((tool) => ({
           type: "function",
@@ -104,11 +120,16 @@ class OpenAIRealtimeSession implements RealtimeSession {
     }
 
     switch (event.type) {
+      // La API GA renombró estos dos eventos (antes "response.audio.delta" /
+      // "response.audio_transcript.delta" en Beta); se aceptan ambos nombres
+      // por si acaso quedara alguna cuenta todavía en Beta.
+      case "response.output_audio.delta":
       case "response.audio.delta": {
         const delta = event.delta as string | undefined;
         if (delta) this.events?.onAudioChunk(delta);
         break;
       }
+      case "response.output_audio_transcript.delta":
       case "response.audio_transcript.delta": {
         const delta = event.delta as string | undefined;
         if (delta) this.events?.onTranscriptDelta("agent", delta);
