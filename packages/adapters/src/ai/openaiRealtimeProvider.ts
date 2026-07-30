@@ -31,11 +31,15 @@ class OpenAIRealtimeSession implements RealtimeSession {
     this.events = events;
 
     await new Promise<void>((resolve, reject) => {
+      // Sin el header "OpenAI-Beta: realtime=v1": esa era la forma de optar
+      // por la API Realtime en Beta, que OpenAI retiró ("The Realtime Beta
+      // API is no longer supported. Please use /v1/realtime for the GA
+      // API."). La URL /v1/realtime ya es la de la API GA una vez que se
+      // deja de pedir el modo beta.
       const url = `${REALTIME_BASE_URL}?model=${encodeURIComponent(this.apiConfig.model)}`;
       this.ws = new WebSocket(url, {
         headers: {
           Authorization: `Bearer ${this.apiConfig.apiKey}`,
-          "OpenAI-Beta": "realtime=v1",
         },
       });
 

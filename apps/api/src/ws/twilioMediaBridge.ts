@@ -9,6 +9,7 @@ import {
   transitionCall,
   scheduleNextAttemptIfNeeded,
 } from "@lynkro-outbound/domain";
+import { canTransition } from "@lynkro-outbound/shared";
 import { REALTIME_TOOL_DEFINITIONS } from "./toolDefinitions.js";
 import { logger } from "../lib/logger.js";
 
@@ -55,11 +56,17 @@ export function registerTwilioMediaBridge(app: FastifyInstance): void {
 
       const call = await prisma.call.findUnique({ where: { id: callId } });
       if (call && !["completed", "failed", "canceled", "no_answer", "busy", "blocked"].includes(call.status)) {
+        // "completed" solo es una transición válida desde voicemail_detected/
+        // in_progress/transferring. Si el puente se cae antes de eso (p.ej. la
+        // sesión de IA nunca llegó a abrirse), la única salida válida es
+        // "failed" — de lo contrario transitionCall lanza y la llamada queda
+        // atascada sin poder cerrarse nunca.
+        const toStatus = canTransition(call.status, "completed") ? "completed" : "failed";
         try {
           await transitionCall({
             organizationId: call.organizationId,
             callId: call.id,
-            toStatus: "completed",
+            toStatus,
             causedBy: `bridge-cleanup:${reason}`,
           });
           if (!call.outcome) {
