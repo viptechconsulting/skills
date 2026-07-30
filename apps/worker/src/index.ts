@@ -17,8 +17,10 @@ async function main(): Promise<void> {
   const dispatchWorker = new Worker(
     QUEUE_NAMES.callDispatch,
     async (job) => {
+      logger.info({ jobId: job.id, data: job.data }, "call_dispatch_job_received");
       const data = callDispatchJobSchema.parse(job.data);
       await processCallDispatch(data);
+      logger.info({ jobId: job.id }, "call_dispatch_job_processor_returned");
     },
     { connection: new Redis(env.REDIS_URL, { maxRetriesPerRequest: null }), concurrency: 5 },
   );
@@ -38,6 +40,12 @@ async function main(): Promise<void> {
   });
   dispatchWorker.on("error", (error) => {
     logger.error({ err: error.message }, "call_dispatch_worker_error");
+  });
+  dispatchWorker.on("active", (job) => {
+    logger.info({ jobId: job.id }, "call_dispatch_job_active");
+  });
+  dispatchWorker.on("completed", (job) => {
+    logger.info({ jobId: job.id }, "call_dispatch_job_completed_event");
   });
   maintenanceWorker.on("failed", (job, error) => {
     logger.error({ err: error.message, jobId: job?.id }, "call_maintenance_job_failed");
