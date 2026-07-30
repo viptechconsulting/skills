@@ -68,6 +68,32 @@ describe("processCallMaintenance", () => {
     expect(result.enqueued).toBe(0);
   });
 
+  it("encola un prospecto nuevo recién asignado a una campaña aunque no tenga nextAttemptAt (import masivo)", async () => {
+    const org = await seedOrganizationFixture(prisma, "Maint4");
+    await prisma.prospect.create({
+      data: {
+        organizationId: org.organizationId,
+        campaignId: org.campaignId,
+        name: "Prospecto importado",
+        phoneE164: "+14155553004",
+        timezone: "America/Bogota",
+        intent: "test",
+        desiredOutcome: "test",
+        source: "test",
+        consentGiven: true,
+        status: "new",
+        nextAttemptAt: null,
+      },
+    });
+
+    const result = await processCallMaintenance();
+
+    expect(result.enqueued).toBeGreaterThanOrEqual(1);
+    const call = await prisma.call.findFirst({ where: { organizationId: org.organizationId } });
+    expect(call).not.toBeNull();
+    expect(call?.status).toBe("queued");
+  });
+
   it("no encola un prospecto cuyo nextAttemptAt aún no vence", async () => {
     const org = await seedOrganizationFixture(prisma, "Maint3");
     await prisma.prospect.create({

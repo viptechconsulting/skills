@@ -5,20 +5,22 @@ import { callDispatchQueue } from "../lib/queues.js";
 import { logger } from "../lib/logger.js";
 
 /**
- * Job periódico: busca prospectos programados (por "schedule" manual o por
- * un reintento previamente calculado) cuyo nextAttemptAt ya venció, vuelve a
- * validar elegibilidad y, si corresponde, crea la llamada y la encola.
- * Nunca marca una llamada como elegible sin pasar por el motor de
+ * Job periódico: busca prospectos listos para su próximo intento — ya sea
+ * "new" recién asignados a una campaña (primer intento, sin fecha propia) o
+ * "scheduled" por un reintento/programación manual cuyo nextAttemptAt ya
+ * venció — vuelve a validar elegibilidad y, si corresponde, crea la llamada
+ * y la encola. Esto es lo que permite que una importación masiva por CSV
+ * asignada a una campaña activa se marque sola, sin acción manual por
+ * prospecto. Nunca marca una llamada como elegible sin pasar por el motor de
  * elegibilidad — el mero vencimiento del temporizador no es suficiente.
  */
 export async function processCallMaintenance(): Promise<{ scanned: number; enqueued: number }> {
   const now = new Date();
   const dueProspects = await prisma.prospect.findMany({
     where: {
-      status: { in: ["scheduled", "new"] },
-      nextAttemptAt: { lte: now },
       isBlocked: false,
       campaignId: { not: null },
+      OR: [{ status: "new" }, { status: "scheduled", nextAttemptAt: { lte: now } }],
     },
     take: 200,
   });
