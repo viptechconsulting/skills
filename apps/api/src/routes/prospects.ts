@@ -257,14 +257,27 @@ export async function prospectRoutes(fastify: FastifyInstance): Promise<void> {
   fastify.delete("/prospects/:id", { preHandler: fastify.requireRole(["owner", "admin"]) }, async (request, reply) => {
     const organizationId = request.auth!.organizationId;
     const { id } = request.params as { id: string };
+    const force = (request.query as { force?: string }).force === "true";
     const prospect = await prisma.prospect.findFirst({ where: { id, organizationId } });
     if (!prospect) return reply.code(404).send({ error: "PROSPECT_NOT_FOUND" });
 
     try {
-      await prisma.prospect.delete({ where: { id } });
+      if (force) {
+        // Eliminación forzada explícita: borra también el historial de
+        // llamadas/citas del prospecto (CallEvent/CallToolExecution caen en
+        // cascada desde Call). Solo se llega aquí si el usuario confirmó
+        // borrar el historial a propósito.
+        await prisma.$transaction([
+          prisma.call.deleteMany({ where: { prospectId: id, organizationId } }),
+          prisma.appointment.deleteMany({ where: { prospectId: id, organizationId } }),
+          prisma.prospect.delete({ where: { id } }),
+        ]);
+      } else {
+        await prisma.prospect.delete({ where: { id } });
+      }
     } catch (error) {
       // El prospecto tiene llamadas o citas asociadas (ON DELETE RESTRICT):
-      // preservamos ese historial a propósito en vez de borrarlo en cascada.
+      // preservamos ese historial por defecto en vez de borrarlo en cascada.
       if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2003") {
         return reply.code(409).send({ error: "PROSPECT_HAS_CALL_HISTORY" });
       }
@@ -276,7 +289,7 @@ export async function prospectRoutes(fastify: FastifyInstance): Promise<void> {
       actorUserId: request.auth!.userId,
       entityType: "prospect",
       entityId: id,
-      action: "delete",
+      action: force ? "delete_forced_with_history" : "delete",
       before: prospect as never,
     });
 

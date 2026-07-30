@@ -146,9 +146,16 @@ export default function ProspectDetailPage() {
       router.push("/prospects");
     } catch (err) {
       if (err instanceof ApiError && err.status === 409) {
-        setError(
-          "No se puede eliminar: este prospecto ya tiene llamadas o citas registradas. Usa \"Bloquear comunicaciones\" en su lugar para preservar el historial.",
+        const confirmForce = window.confirm(
+          `"${prospect.name}" ya tiene llamadas o citas registradas.\n\n¿Eliminarlo de todas formas, borrando TAMBIÉN todo su historial de llamadas? Esto no se puede deshacer.`,
         );
+        if (!confirmForce) return;
+        try {
+          await api.delete(`/prospects/${prospect.id}?force=true`);
+          router.push("/prospects");
+        } catch (forceErr) {
+          setError(forceErr instanceof ApiError ? forceErr.message : "Error al eliminar el prospecto");
+        }
       } else {
         setError(err instanceof ApiError ? err.message : "Error al eliminar el prospecto");
       }

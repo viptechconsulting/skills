@@ -275,4 +275,54 @@ describe("prospect routes: elegibilidad y acciones", () => {
     const stillThere = await prisma.prospect.findUnique({ where: { id: prospect.id } });
     expect(stillThere).not.toBeNull();
   });
+
+  it("con force=true elimina el prospecto y su historial de llamadas asociado", async () => {
+    const { cookie, organizationId } = await registerAndGetCookie("delete-forced@test.com");
+    const { phoneNumber, voiceAgent } = await createPhoneAndAgent(organizationId);
+    const campaign = await prisma.campaign.create({
+      data: {
+        organizationId,
+        name: "Campaña con historial",
+        objective: "Objetivo",
+        timezoneDefault: "America/Bogota",
+        outboundPhoneNumberId: phoneNumber.id,
+        voiceAgentId: voiceAgent.id,
+        agentInstructions: "Instrucciones",
+        status: "active",
+      },
+    });
+    const prospect = await prisma.prospect.create({
+      data: {
+        organizationId,
+        campaignId: campaign.id,
+        name: "Prospecto a forzar",
+        phoneE164: "+14155559966",
+        timezone: "America/Bogota",
+        intent: "test",
+        desiredOutcome: "test",
+        source: "test",
+        status: "completed",
+      },
+    });
+    const call = await prisma.call.create({
+      data: {
+        organizationId,
+        campaignId: campaign.id,
+        prospectId: prospect.id,
+        phoneNumberId: phoneNumber.id,
+        status: "completed",
+        attemptNumber: 1,
+      },
+    });
+
+    const deleteResponse = await app.inject({
+      method: "DELETE",
+      url: `/prospects/${prospect.id}?force=true`,
+      headers: { cookie },
+    });
+    expect(deleteResponse.statusCode).toBe(200);
+
+    expect(await prisma.prospect.findUnique({ where: { id: prospect.id } })).toBeNull();
+    expect(await prisma.call.findUnique({ where: { id: call.id } })).toBeNull();
+  });
 });
