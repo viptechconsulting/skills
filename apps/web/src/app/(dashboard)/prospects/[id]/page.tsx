@@ -5,6 +5,22 @@ import { useParams } from "next/navigation";
 import Link from "next/link";
 import { api, ApiError } from "@/lib/apiClient";
 
+// Copia de apps/api: packages/shared/src/eligibility.ts ELIGIBILITY_REJECTION_MESSAGES.
+// Duplicado aquí en vez de importar el barrel de @lynkro-outbound/shared porque ese
+// paquete también reexporta módulos con dependencias de Node (crypto) que rompen el
+// bundle de cliente de Next.js.
+const ELIGIBILITY_REJECTION_MESSAGES: Record<string, string> = {
+  INVALID_PHONE_NUMBER: "El número de teléfono no está en formato E.164 válido.",
+  CONSENT_REQUIRED_NOT_GIVEN: "El prospecto no tiene consentimiento registrado.",
+  DO_NOT_CALL_LISTED: "El número está en la lista Do Not Call de la organización.",
+  CAMPAIGN_NOT_ACTIVE: "La campaña no está activa (pausada, en borrador o archivada).",
+  OUTSIDE_ALLOWED_WINDOW: "La hora local del prospecto está fuera de la ventana permitida.",
+  MAX_ATTEMPTS_REACHED: "Se alcanzó el número máximo de intentos configurado.",
+  ACTIVE_CALL_IN_PROGRESS: "Ya existe una llamada activa (no terminal) para este prospecto.",
+  FUTURE_APPOINTMENT_EXISTS: "El prospecto ya tiene una cita futura activa.",
+  PROSPECT_BLOCKED: "El prospecto está bloqueado para futuras comunicaciones.",
+};
+
 interface Prospect {
   id: string;
   name: string;
@@ -68,8 +84,14 @@ export default function ProspectDetailPage() {
       setMessage(successMessage);
       load();
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Ocurrió un error al ejecutar la acción");
+      setError(err instanceof ApiError ? describeError(err) : "Ocurrió un error al ejecutar la acción");
     }
+  }
+
+  function describeError(err: ApiError): string {
+    const reason = typeof err.body === "object" && err.body && "reason" in err.body ? (err.body as { reason: unknown }).reason : undefined;
+    const humanReason = typeof reason === "string" ? ELIGIBILITY_REJECTION_MESSAGES[reason] : undefined;
+    return humanReason ?? err.message;
   }
 
   if (!prospect) return <p className="text-sm text-slate-500">Cargando...</p>;

@@ -5,8 +5,15 @@ export class ApiError extends Error {
     public readonly status: number,
     public readonly body: unknown,
   ) {
-    super(typeof body === "object" && body && "error" in body ? String((body as { error: unknown }).error) : "API_ERROR");
+    super(ApiError.buildMessage(body));
     this.name = "ApiError";
+  }
+
+  private static buildMessage(body: unknown): string {
+    if (typeof body !== "object" || !body) return "API_ERROR";
+    const code = "error" in body ? String((body as { error: unknown }).error) : "API_ERROR";
+    const reason = "reason" in body ? (body as { reason: unknown }).reason : undefined;
+    return reason ? `${code}: ${reason}` : code;
   }
 }
 
