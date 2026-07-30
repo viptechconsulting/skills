@@ -141,6 +141,7 @@ export function registerTwilioMediaBridge(app: FastifyInstance): void {
 
       await aiSession.start({
         onAudioChunk: (base64Audio) => {
+          logger.info({ callId, hasStreamSid: Boolean(streamSid), closed, bytes: base64Audio.length }, "realtime_audio_chunk_received");
           if (!streamSid || closed) return;
           socket.send(
             JSON.stringify({ event: "media", streamSid, media: { payload: base64Audio } }),
@@ -199,6 +200,7 @@ export function registerTwilioMediaBridge(app: FastifyInstance): void {
 
         if (message.event === "start" && message.start) {
           streamSid = message.streamSid ?? null;
+          logger.info({ callId, streamSid }, "twilio_stream_started");
         } else if (message.event === "media" && message.media) {
           aiSession?.sendAudioChunk(message.media.payload);
         } else if (message.event === "stop") {
