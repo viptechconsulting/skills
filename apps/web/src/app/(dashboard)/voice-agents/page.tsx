@@ -11,6 +11,8 @@ interface VoiceAgent {
   tone: string;
   defaultLanguage: string;
   voice: string;
+  ttsProvider: "openai" | "elevenlabs";
+  elevenLabsVoiceId: string | null;
 }
 
 interface DependentCampaign {
@@ -24,7 +26,15 @@ export default function VoiceAgentsPage() {
   const [agents, setAgents] = useState<VoiceAgent[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
-  const [form, setForm] = useState({ name: "", persona: "", tone: "", defaultLanguage: "es", voice: "alloy" });
+  const [form, setForm] = useState({
+    name: "",
+    persona: "",
+    tone: "",
+    defaultLanguage: "es",
+    voice: "alloy",
+    ttsProvider: "openai" as "openai" | "elevenlabs",
+    elevenLabsVoiceId: "",
+  });
   const [reassignFor, setReassignFor] = useState<{ agent: VoiceAgent; campaigns: DependentCampaign[] } | null>(null);
   const [reassignTargetId, setReassignTargetId] = useState("");
 
@@ -41,8 +51,19 @@ export default function VoiceAgentsPage() {
     event.preventDefault();
     setError(null);
     try {
-      await api.post("/voice-agents", form);
-      setForm({ name: "", persona: "", tone: "", defaultLanguage: "es", voice: "alloy" });
+      await api.post("/voice-agents", {
+        ...form,
+        elevenLabsVoiceId: form.ttsProvider === "elevenlabs" ? form.elevenLabsVoiceId.trim() || undefined : undefined,
+      });
+      setForm({
+        name: "",
+        persona: "",
+        tone: "",
+        defaultLanguage: "es",
+        voice: "alloy",
+        ttsProvider: "openai",
+        elevenLabsVoiceId: "",
+      });
       load();
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Error al crear el agente de voz");
@@ -114,6 +135,38 @@ export default function VoiceAgentsPage() {
             </datalist>
           </div>
         </div>
+        <div className="grid grid-cols-2 gap-4">
+          <div>
+            <label className="label" htmlFor="va-tts-provider">Motor de voz</label>
+            <select
+              id="va-tts-provider"
+              className="input"
+              value={form.ttsProvider}
+              onChange={(e) => setForm((f) => ({ ...f, ttsProvider: e.target.value as "openai" | "elevenlabs" }))}
+            >
+              <option value="openai">OpenAI Realtime (campo &quot;Voz&quot; de arriba)</option>
+              <option value="elevenlabs">ElevenLabs (acento más nativo)</option>
+            </select>
+          </div>
+          {form.ttsProvider === "elevenlabs" && (
+            <div>
+              <label className="label" htmlFor="va-elevenlabs-voice-id">Voice ID de ElevenLabs</label>
+              <input
+                id="va-elevenlabs-voice-id"
+                className="input"
+                placeholder="Ej: 21m00Tcm4TlvDq8ikWAM"
+                value={form.elevenLabsVoiceId}
+                onChange={(e) => setForm((f) => ({ ...f, elevenLabsVoiceId: e.target.value }))}
+              />
+            </div>
+          )}
+        </div>
+        {form.ttsProvider === "elevenlabs" && (
+          <p className="text-xs text-slate-500">
+            Necesitás tener ElevenLabs conectado en <code>/integrations</code>. Sin Voice ID configurado, la llamada
+            usa la voz de OpenAI como respaldo.
+          </p>
+        )}
         <div>
           <label className="label" htmlFor="va-persona">Personalidad / identidad del agente</label>
           <textarea

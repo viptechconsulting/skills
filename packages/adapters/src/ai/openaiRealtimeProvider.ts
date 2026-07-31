@@ -27,6 +27,7 @@ class OpenAIRealtimeSession implements RealtimeSession {
   private lastServerActivityAt = Date.now();
   private heartbeatTimer: ReturnType<typeof setInterval> | null = null;
   private hasActiveResponse = false;
+  private currentResponseText = "";
 
   constructor(
     private readonly apiConfig: OpenAIRealtimeConfig,
@@ -139,15 +140,23 @@ class OpenAIRealtimeSession implements RealtimeSession {
       case "response.output_audio_transcript.delta":
       case "response.audio_transcript.delta": {
         const delta = event.delta as string | undefined;
-        if (delta) this.events?.onTranscriptDelta("agent", delta);
+        if (delta) {
+          this.events?.onTranscriptDelta("agent", delta);
+          this.currentResponseText += delta;
+        }
         break;
       }
       case "response.created": {
         this.hasActiveResponse = true;
+        this.currentResponseText = "";
         break;
       }
       case "response.done": {
         this.hasActiveResponse = false;
+        if (this.currentResponseText) {
+          this.events?.onAgentUtteranceComplete?.(this.currentResponseText);
+          this.currentResponseText = "";
+        }
         break;
       }
       case "conversation.item.input_audio_transcription.completed": {

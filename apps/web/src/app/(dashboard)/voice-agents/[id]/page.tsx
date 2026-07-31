@@ -12,6 +12,8 @@ interface VoiceAgent {
   tone: string;
   defaultLanguage: string;
   voice: string;
+  ttsProvider: "openai" | "elevenlabs";
+  elevenLabsVoiceId: string | null;
 }
 
 interface DependentCampaign {
@@ -68,6 +70,8 @@ export default function VoiceAgentDetailPage() {
         tone: form.tone,
         defaultLanguage: form.defaultLanguage,
         voice: form.voice,
+        ttsProvider: form.ttsProvider,
+        elevenLabsVoiceId: form.ttsProvider === "elevenlabs" ? (form.elevenLabsVoiceId ?? "").trim() || undefined : undefined,
       });
       setMessage("Agente de voz actualizado");
       load();
@@ -236,6 +240,40 @@ export default function VoiceAgentDetailPage() {
             </datalist>
           </div>
         </div>
+        <div className="grid grid-cols-2 gap-4">
+          <div>
+            <label className="label" htmlFor="va-tts-provider">Motor de voz</label>
+            <select
+              id="va-tts-provider"
+              className="input"
+              value={form.ttsProvider}
+              onChange={(e) =>
+                setForm((f) => (f ? { ...f, ttsProvider: e.target.value as "openai" | "elevenlabs" } : f))
+              }
+            >
+              <option value="openai">OpenAI Realtime (campo &quot;Voz&quot; de arriba)</option>
+              <option value="elevenlabs">ElevenLabs (acento más nativo)</option>
+            </select>
+          </div>
+          {form.ttsProvider === "elevenlabs" && (
+            <div>
+              <label className="label" htmlFor="va-elevenlabs-voice-id">Voice ID de ElevenLabs</label>
+              <input
+                id="va-elevenlabs-voice-id"
+                className="input"
+                placeholder="Ej: 21m00Tcm4TlvDq8ikWAM"
+                value={form.elevenLabsVoiceId ?? ""}
+                onChange={(e) => setForm((f) => (f ? { ...f, elevenLabsVoiceId: e.target.value } : f))}
+              />
+            </div>
+          )}
+        </div>
+        {form.ttsProvider === "elevenlabs" && (
+          <p className="text-xs text-slate-500">
+            Necesitás tener ElevenLabs conectado en <Link href="/integrations" className="text-brand-600 hover:underline">/integrations</Link>.
+            Sin Voice ID configurado, la llamada usa la voz de OpenAI como respaldo.
+          </p>
+        )}
         <div>
           <label className="label" htmlFor="va-persona">Personalidad / identidad del agente</label>
           <textarea

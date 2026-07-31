@@ -105,5 +105,5 @@ export const AGENT_TOOL_NAMES = [
 ] as const;
 export type AgentToolName = (typeof AGENT_TOOL_NAMES)[number];
 
-export const INTEGRATION_PROVIDERS = ["twilio", "openai", "gohighlevel"] as const;
+export const INTEGRATION_PROVIDERS = ["twilio", "openai", "gohighlevel", "elevenlabs"] as const;
 export type IntegrationProvider = (typeof INTEGRATION_PROVIDERS)[number];

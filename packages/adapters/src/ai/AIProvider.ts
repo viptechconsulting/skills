@@ -31,6 +31,14 @@ export interface RealtimeSessionEvents {
    */
   onToolCall: (request: RealtimeToolCallRequest) => void | Promise<void>;
   onTranscriptDelta: (speaker: "agent" | "prospect", text: string) => void;
+  /**
+   * Se dispara una vez por respuesta del agente, con el texto completo ya
+   * acumulado (mismo texto que llegó de a poco por onTranscriptDelta).
+   * Opcional: solo lo usan wrappers que reemplazan el audio del proveedor
+   * de IA por otro motor de voz (ver ElevenLabs) y necesitan saber cuándo
+   * una respuesta terminó para sintetizarla completa.
+   */
+  onAgentUtteranceComplete?: (fullText: string) => void;
   onSpeechStartedByProspect: () => void;
   onError: (error: Error) => void;
   onClose: () => void;

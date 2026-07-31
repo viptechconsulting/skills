@@ -2,7 +2,7 @@ import type { FastifyInstance } from "fastify";
 import type { WebSocket } from "ws";
 import { prisma } from "@lynkro-outbound/db";
 import { buildRealtimeSystemPrompt } from "@lynkro-outbound/shared";
-import type { RealtimeSession } from "@lynkro-outbound/adapters";
+import { wrapRealtimeSessionWithElevenLabsVoice, type RealtimeSession } from "@lynkro-outbound/adapters";
 import {
   getAdapterBundleForOrganization,
   executeAgentTool,
@@ -164,7 +164,7 @@ export function registerTwilioMediaBridge(app: FastifyInstance): void {
         humanHandoffAvailable,
       });
 
-      aiSession = adapters.ai.createRealtimeSession({
+      const rawAiSession = adapters.ai.createRealtimeSession({
         callId,
         systemPrompt,
         voice: voiceAgent.voice,
@@ -173,6 +173,22 @@ export function registerTwilioMediaBridge(app: FastifyInstance): void {
         inputAudioFormat: "g711_ulaw",
         outputAudioFormat: "g711_ulaw",
       });
+
+      if (voiceAgent.ttsProvider === "elevenlabs" && voiceAgent.elevenLabsVoiceId && adapters.tts) {
+        // OpenAI Realtime sigue escuchando, razonando y decidiendo qué
+        // herramientas usar con total normalidad; solo se reemplaza el audio
+        // de salida por una síntesis de ElevenLabs (acento nativo real en
+        // español, que las voces de OpenAI no logran solo con prompting).
+        aiSession = wrapRealtimeSessionWithElevenLabsVoice(rawAiSession, adapters.tts, voiceAgent.elevenLabsVoiceId);
+      } else {
+        if (voiceAgent.ttsProvider === "elevenlabs") {
+          logger.warn(
+            { callId, voiceAgentId: voiceAgent.id },
+            "elevenlabs_voice_requested_but_not_configured_falling_back_to_openai",
+          );
+        }
+        aiSession = rawAiSession;
+      }
 
       await aiSession.start({
         onAudioChunk: (base64Audio) => {

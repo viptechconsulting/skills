@@ -5,6 +5,10 @@ export * from "./telephony/simulationTelephonyProvider.js";
 export * from "./ai/AIProvider.js";
 export * from "./ai/openaiRealtimeProvider.js";
 export * from "./ai/simulationAIProvider.js";
+export * from "./ai/elevenLabsVoiceSession.js";
+
+export * from "./tts/TTSProvider.js";
+export * from "./tts/elevenLabsTtsProvider.js";
 
 export * from "./crm/CrmProvider.js";
 export * from "./crm/ghlCrmProvider.js";

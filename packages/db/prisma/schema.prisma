@@ -89,6 +89,7 @@ enum IntegrationProvider {
   twilio
   openai
   gohighlevel
+  elevenlabs
 }
 
 model IntegrationCredential {
@@ -135,6 +136,12 @@ model VoiceAgent {
   tone                 String   @default("")
   defaultLanguage      String   @default("es")
   voice                String   @default("alloy")
+  /// Motor de síntesis de voz para las llamadas de este agente: "openai"
+  /// (voz nativa de OpenAI Realtime, campo `voice` de arriba) o "elevenlabs"
+  /// (voz de ElevenLabs vía `elevenLabsVoiceId`, para acentos más nativos).
+  ttsProvider          String   @default("openai")
+  /// Voice ID de ElevenLabs a usar cuando ttsProvider = "elevenlabs".
+  elevenLabsVoiceId    String?
   systemPromptTemplate String
   createdAt            DateTime @default(now())
   updatedAt            DateTime @updatedAt

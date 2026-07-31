@@ -1,4 +1,11 @@
-import { buildAdapterBundle, type AdapterBundle, type GhlCredentialPayload, type OpenAICredentialPayload, type TwilioCredentialPayload } from "@lynkro-outbound/adapters";
+import {
+  buildAdapterBundle,
+  type AdapterBundle,
+  type ElevenLabsCredentialPayload,
+  type GhlCredentialPayload,
+  type OpenAICredentialPayload,
+  type TwilioCredentialPayload,
+} from "@lynkro-outbound/adapters";
 import { getIntegrationCredential } from "./integrationCredentialsService.js";
 
 /**
@@ -14,10 +21,14 @@ export async function getAdapterBundleForOrganization(
     return buildAdapterBundle({ simulationMode: true });
   }
 
-  const [twilioCreds, openaiCreds, ghlCreds] = await Promise.all([
+  const [twilioCreds, openaiCreds, ghlCreds, elevenLabsCreds] = await Promise.all([
     getIntegrationCredential<TwilioCredentialPayload>(organizationId, "twilio"),
     getIntegrationCredential<OpenAICredentialPayload>(organizationId, "openai"),
     getIntegrationCredential<GhlCredentialPayload>(organizationId, "gohighlevel"),
+    // A diferencia de twilio/openai/ghl, ElevenLabs es opcional: no todos
+    // los agentes de voz lo usan (ver VoiceAgent.ttsProvider), así que su
+    // ausencia nunca debe bloquear la construcción del resto del bundle.
+    getIntegrationCredential<ElevenLabsCredentialPayload>(organizationId, "elevenlabs"),
   ]);
 
   return buildAdapterBundle({
@@ -25,5 +36,6 @@ export async function getAdapterBundleForOrganization(
     twilio: twilioCreds ?? undefined,
     openai: openaiCreds ?? undefined,
     ghl: ghlCreds ?? undefined,
+    elevenLabs: elevenLabsCreds ?? undefined,
   });
 }

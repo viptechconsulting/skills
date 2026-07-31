@@ -10,6 +10,8 @@ const createVoiceAgentSchema = z.object({
   tone: z.string().max(500).default(""),
   defaultLanguage: z.string().min(2).max(10).default("es"),
   voice: z.string().min(1).max(50).default("alloy"),
+  ttsProvider: z.enum(["openai", "elevenlabs"]).default("openai"),
+  elevenLabsVoiceId: z.string().max(100).optional(),
   systemPromptTemplate: z.string().min(1).max(200).default("default_v1"),
 });
 

@@ -13,6 +13,8 @@ import { SimulationCalendarProvider } from "./calendar/simulationCalendarProvide
 import type { MessagingProvider } from "./messaging/MessagingProvider.js";
 import { TwilioMessagingProvider } from "./messaging/twilioMessagingProvider.js";
 import { SimulationMessagingProvider } from "./messaging/simulationMessagingProvider.js";
+import type { TTSProvider } from "./tts/TTSProvider.js";
+import { ElevenLabsTtsProvider } from "./tts/elevenLabsTtsProvider.js";
 
 export interface TwilioCredentialPayload {
   accountSid: string;
@@ -30,12 +32,22 @@ export interface GhlCredentialPayload {
   locationId: string;
 }
 
+export interface ElevenLabsCredentialPayload {
+  apiKey: string;
+}
+
 export interface AdapterBundle {
   telephony: TelephonyProvider;
   ai: AIProvider;
   crm: CrmProvider;
   calendar: CalendarProvider;
   messaging: MessagingProvider;
+  /**
+   * Solo definido si la organización conectó ElevenLabs. A diferencia del
+   * resto, es opcional incluso fuera de modo simulación: no todos los
+   * agentes de voz lo necesitan (ver VoiceAgent.ttsProvider).
+   */
+  tts?: TTSProvider;
 }
 
 export interface BuildAdapterBundleInput {
@@ -43,6 +55,7 @@ export interface BuildAdapterBundleInput {
   twilio?: TwilioCredentialPayload;
   openai?: OpenAICredentialPayload;
   ghl?: GhlCredentialPayload;
+  elevenLabs?: ElevenLabsCredentialPayload;
 }
 
 /**
@@ -79,5 +92,6 @@ export function buildAdapterBundle(input: BuildAdapterBundleInput): AdapterBundl
     crm: new GhlCrmProvider(input.ghl),
     calendar: new GhlCalendarProvider(input.ghl),
     messaging: new TwilioMessagingProvider(input.twilio),
+    tts: input.elevenLabs ? new ElevenLabsTtsProvider(input.elevenLabs) : undefined,
   };
 }

@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { api, ApiError } from "@/lib/apiClient";
 
-type Provider = "twilio" | "openai" | "gohighlevel";
+type Provider = "twilio" | "openai" | "gohighlevel" | "elevenlabs";
 
 const PROVIDER_FIELDS: Record<Provider, { key: string; label: string }[]> = {
   twilio: [
@@ -19,12 +19,14 @@ const PROVIDER_FIELDS: Record<Provider, { key: string; label: string }[]> = {
     { key: "accessToken", label: "Access Token" },
     { key: "locationId", label: "Location ID" },
   ],
+  elevenlabs: [{ key: "apiKey", label: "API Key" }],
 };
 
 const PROVIDER_LABELS: Record<Provider, string> = {
   twilio: "Twilio",
   openai: "OpenAI",
   gohighlevel: "GoHighLevel",
+  elevenlabs: "ElevenLabs",
 };
 
 export default function IntegrationsPage() {
@@ -34,6 +36,7 @@ export default function IntegrationsPage() {
     twilio: {},
     openai: {},
     gohighlevel: {},
+    elevenlabs: {},
   });
 
   async function load() {
@@ -78,6 +81,12 @@ export default function IntegrationsPage() {
                 {configured.includes(provider) ? "Configurado" : "Sin configurar"}
               </span>
             </div>
+            {provider === "elevenlabs" && (
+              <p className="mb-3 text-sm text-slate-500">
+                Opcional. Permite elegir ElevenLabs como motor de voz en un agente (sección &quot;Motor de voz&quot;
+                de cada agente), con acentos más nativos que las voces de OpenAI Realtime.
+              </p>
+            )}
             <div className="grid gap-3 md:grid-cols-2">
               {PROVIDER_FIELDS[provider].map((field) => (
                 <div key={field.key}>
