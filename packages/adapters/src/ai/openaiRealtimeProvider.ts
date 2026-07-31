@@ -9,7 +9,13 @@ import type {
 export interface OpenAIRealtimeConfig {
   apiKey: string;
   model: string;
-  /** Milisegundos de espera sin respuesta del servidor antes de considerar la conexión muerta. */
+  /**
+   * Milisegundos entre cada ping de verificación de conexión (y cuánto se
+   * espera el pong antes de considerarla muerta). NO es un timeout de
+   * silencio conversacional: una llamada real puede quedarse sin mensajes
+   * del servidor por más de esto solo porque el prospecto tarda en
+   * responder, y eso es normal, no un signo de conexión caída.
+   */
   heartbeatTimeoutMs?: number;
 }
 
@@ -38,8 +44,8 @@ class OpenAIRealtimeSession implements RealtimeSession {
   private ws: WebSocket | null = null;
   private events: RealtimeSessionEvents | null = null;
   private closed = false;
-  private lastServerActivityAt = Date.now();
   private heartbeatTimer: ReturnType<typeof setInterval> | null = null;
+  private awaitingPong = false;
   private hasActiveResponse = false;
   private currentResponseText = "";
   private firstSentenceEmitted = false;
@@ -79,8 +85,11 @@ class OpenAIRealtimeSession implements RealtimeSession {
       });
 
       this.ws.on("message", (raw) => {
-        this.lastServerActivityAt = Date.now();
         this.handleServerEvent(raw.toString());
+      });
+
+      this.ws.on("pong", () => {
+        this.awaitingPong = false;
       });
 
       this.ws.on("error", (error) => {
@@ -266,13 +275,22 @@ class OpenAIRealtimeSession implements RealtimeSession {
   }
 
   private startHeartbeatWatchdog(): void {
-    const timeoutMs = this.apiConfig.heartbeatTimeoutMs ?? 30_000;
+    // Verifica la conexión TCP/WebSocket en sí (ping/pong a nivel de
+    // protocolo), NO la actividad conversacional — una llamada real puede
+    // quedarse en silencio de sobra (el prospecto tardando en responder)
+    // sin que eso signifique que la conexión murió. Si no llega el pong
+    // antes del siguiente ciclo, ahí sí la conexión está realmente caída.
+    const intervalMs = this.apiConfig.heartbeatTimeoutMs ?? 30_000;
     this.heartbeatTimer = setInterval(() => {
-      if (Date.now() - this.lastServerActivityAt > timeoutMs) {
-        this.events?.onError(new Error("OpenAI Realtime: sin actividad del servidor, cerrando sesión"));
+      if (!this.ws || this.ws.readyState !== WebSocket.OPEN) return;
+      if (this.awaitingPong) {
+        this.events?.onError(new Error("OpenAI Realtime: sin respuesta de ping, cerrando sesión"));
         void this.close();
+        return;
       }
-    }, Math.min(timeoutMs, 10_000));
+      this.awaitingPong = true;
+      this.ws.ping();
+    }, intervalMs);
   }
 
   private stopHeartbeatWatchdog(): void {
