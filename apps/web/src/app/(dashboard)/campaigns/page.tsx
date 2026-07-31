@@ -16,18 +16,27 @@ import { api } from "@/lib/apiClient";
 
 export default function CampaignsPage() {
   const [campaigns, setCampaigns] = useState<Campaign[] | null>(null);
+  const [showArchived, setShowArchived] = useState(false);
 
   useEffect(() => {
     api.get<{ campaigns: Campaign[] }>("/campaigns").then((data) => setCampaigns(data.campaigns));
   }, []);
 
+  const visibleCampaigns = campaigns?.filter((c) => showArchived || c.status !== "archived");
+
   return (
     <div>
       <div className="mb-6 flex items-center justify-between">
         <h1 className="text-2xl font-semibold">Campañas</h1>
-        <Link href="/campaigns/new" className="btn-primary">
-          Nueva campaña
-        </Link>
+        <div className="flex items-center gap-4">
+          <label className="flex items-center gap-2 text-sm text-slate-600">
+            <input type="checkbox" checked={showArchived} onChange={(e) => setShowArchived(e.target.checked)} />
+            Mostrar archivadas
+          </label>
+          <Link href="/campaigns/new" className="btn-primary">
+            Nueva campaña
+          </Link>
+        </div>
       </div>
       <div className="card overflow-x-auto">
         <table className="table-base">
@@ -42,7 +51,7 @@ export default function CampaignsPage() {
             </tr>
           </thead>
           <tbody>
-            {campaigns?.map((c) => (
+            {visibleCampaigns?.map((c) => (
               <tr key={c.id}>
                 <td className="font-medium">{c.name}</td>
                 <td>
@@ -58,10 +67,12 @@ export default function CampaignsPage() {
                 </td>
               </tr>
             ))}
-            {campaigns?.length === 0 && (
+            {visibleCampaigns?.length === 0 && (
               <tr>
                 <td colSpan={6} className="py-6 text-center text-slate-400">
-                  Aún no hay campañas. Crea la primera.
+                  {campaigns?.length === 0
+                    ? "Aún no hay campañas. Crea la primera."
+                    : "No hay campañas activas. Activá \"Mostrar archivadas\" para verlas."}
                 </td>
               </tr>
             )}
