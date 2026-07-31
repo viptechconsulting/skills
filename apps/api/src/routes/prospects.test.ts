@@ -325,4 +325,177 @@ describe("prospect routes: elegibilidad y acciones", () => {
     expect(await prisma.prospect.findUnique({ where: { id: prospect.id } })).toBeNull();
     expect(await prisma.call.findUnique({ where: { id: call.id } })).toBeNull();
   });
+
+  it("bulk-delete elimina varios prospectos sin historial de una", async () => {
+    const { cookie, organizationId } = await registerAndGetCookie("bulk-delete-ok@test.com");
+    const prospects = await Promise.all(
+      ["+14155559001", "+14155559002", "+14155559003"].map((phone, i) =>
+        prisma.prospect.create({
+          data: {
+            organizationId,
+            name: `Prospecto ${i}`,
+            phoneE164: phone,
+            timezone: "America/Bogota",
+            intent: "test",
+            desiredOutcome: "test",
+            source: "test",
+          },
+        }),
+      ),
+    );
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/prospects/bulk-delete",
+      headers: { cookie },
+      payload: { ids: prospects.map((p) => p.id) },
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toMatchObject({ deletedCount: 3, blocked: [], notFound: [] });
+    const remaining = await prisma.prospect.findMany({ where: { organizationId } });
+    expect(remaining).toHaveLength(0);
+  });
+
+  it("bulk-delete reporta los que tienen historial de llamadas en vez de fallar todo el lote", async () => {
+    const { cookie, organizationId } = await registerAndGetCookie("bulk-delete-mixed@test.com");
+    const { phoneNumber, voiceAgent } = await createPhoneAndAgent(organizationId);
+    const campaign = await prisma.campaign.create({
+      data: {
+        organizationId,
+        name: "Campaña",
+        objective: "Objetivo",
+        timezoneDefault: "America/Bogota",
+        outboundPhoneNumberId: phoneNumber.id,
+        voiceAgentId: voiceAgent.id,
+        agentInstructions: "Instrucciones",
+        status: "active",
+      },
+    });
+    const withHistory = await prisma.prospect.create({
+      data: {
+        organizationId,
+        campaignId: campaign.id,
+        name: "Con historial",
+        phoneE164: "+14155559011",
+        timezone: "America/Bogota",
+        intent: "test",
+        desiredOutcome: "test",
+        source: "test",
+      },
+    });
+    await prisma.call.create({
+      data: {
+        organizationId,
+        campaignId: campaign.id,
+        prospectId: withHistory.id,
+        phoneNumberId: phoneNumber.id,
+        status: "completed",
+        attemptNumber: 1,
+      },
+    });
+    const withoutHistory = await prisma.prospect.create({
+      data: {
+        organizationId,
+        name: "Sin historial",
+        phoneE164: "+14155559012",
+        timezone: "America/Bogota",
+        intent: "test",
+        desiredOutcome: "test",
+        source: "test",
+      },
+    });
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/prospects/bulk-delete",
+      headers: { cookie },
+      payload: { ids: [withHistory.id, withoutHistory.id] },
+    });
+
+    expect(response.statusCode).toBe(200);
+    const body = response.json();
+    expect(body.deletedCount).toBe(1);
+    expect(body.blocked).toEqual([{ id: withHistory.id, name: "Con historial" }]);
+    expect(await prisma.prospect.findUnique({ where: { id: withHistory.id } })).not.toBeNull();
+    expect(await prisma.prospect.findUnique({ where: { id: withoutHistory.id } })).toBeNull();
+  });
+
+  it("bulk-delete con force=true borra también el historial de los bloqueados", async () => {
+    const { cookie, organizationId } = await registerAndGetCookie("bulk-delete-forced@test.com");
+    const { phoneNumber, voiceAgent } = await createPhoneAndAgent(organizationId);
+    const campaign = await prisma.campaign.create({
+      data: {
+        organizationId,
+        name: "Campaña",
+        objective: "Objetivo",
+        timezoneDefault: "America/Bogota",
+        outboundPhoneNumberId: phoneNumber.id,
+        voiceAgentId: voiceAgent.id,
+        agentInstructions: "Instrucciones",
+        status: "active",
+      },
+    });
+    const withHistory = await prisma.prospect.create({
+      data: {
+        organizationId,
+        campaignId: campaign.id,
+        name: "Con historial",
+        phoneE164: "+14155559021",
+        timezone: "America/Bogota",
+        intent: "test",
+        desiredOutcome: "test",
+        source: "test",
+      },
+    });
+    const call = await prisma.call.create({
+      data: {
+        organizationId,
+        campaignId: campaign.id,
+        prospectId: withHistory.id,
+        phoneNumberId: phoneNumber.id,
+        status: "completed",
+        attemptNumber: 1,
+      },
+    });
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/prospects/bulk-delete",
+      headers: { cookie },
+      payload: { ids: [withHistory.id], force: true },
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toMatchObject({ deletedCount: 1, blocked: [] });
+    expect(await prisma.prospect.findUnique({ where: { id: withHistory.id } })).toBeNull();
+    expect(await prisma.call.findUnique({ where: { id: call.id } })).toBeNull();
+  });
+
+  it("bulk-delete ignora ids que no pertenecen a la organización", async () => {
+    const { cookie } = await registerAndGetCookie("bulk-delete-scoped@test.com");
+    const { organizationId: otherOrgId } = await registerAndGetCookie("bulk-delete-other-org@test.com");
+    const otherOrgProspect = await prisma.prospect.create({
+      data: {
+        organizationId: otherOrgId,
+        name: "De otra organización",
+        phoneE164: "+14155559031",
+        timezone: "America/Bogota",
+        intent: "test",
+        desiredOutcome: "test",
+        source: "test",
+      },
+    });
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/prospects/bulk-delete",
+      headers: { cookie },
+      payload: { ids: [otherOrgProspect.id] },
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toMatchObject({ deletedCount: 0, blocked: [], notFound: [otherOrgProspect.id] });
+    expect(await prisma.prospect.findUnique({ where: { id: otherOrgProspect.id } })).not.toBeNull();
+  });
 });

@@ -15,16 +15,26 @@ interface Prospect {
   finalOutcome: string | null;
 }
 
+interface BulkDeleteResult {
+  deletedCount: number;
+  blocked: Array<{ id: string; name: string }>;
+  notFound: string[];
+}
+
 export default function ProspectsPage() {
   const [prospects, setProspects] = useState<Prospect[] | null>(null);
   const [importResult, setImportResult] = useState<string | null>(null);
   const [importError, setImportError] = useState<string | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [bulkMessage, setBulkMessage] = useState<string | null>(null);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [bulkDeleting, setBulkDeleting] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   async function load() {
     const { prospects } = await api.get<{ prospects: Prospect[] }>("/prospects");
     setProspects(prospects);
+    setSelectedIds(new Set());
   }
 
   useEffect(() => {
@@ -77,6 +87,57 @@ export default function ProspectsPage() {
     }
   }
 
+  function toggleSelected(id: string) {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  function toggleSelectAll() {
+    if (!prospects) return;
+    setSelectedIds((prev) => (prev.size === prospects.length ? new Set() : new Set(prospects.map((p) => p.id))));
+  }
+
+  async function handleBulkDelete() {
+    if (selectedIds.size === 0) return;
+    if (!window.confirm(`¿Eliminar ${selectedIds.size} prospectos seleccionados? Esta acción no se puede deshacer.`)) {
+      return;
+    }
+    setDeleteError(null);
+    setBulkMessage(null);
+    setBulkDeleting(true);
+    try {
+      const ids = Array.from(selectedIds);
+      const result = await api.post<BulkDeleteResult>("/prospects/bulk-delete", { ids });
+
+      let finalDeleted = result.deletedCount;
+      if (result.blocked.length > 0) {
+        const names = result.blocked.map((b) => b.name).join(", ");
+        const confirmForce = window.confirm(
+          `${result.blocked.length} de los seleccionados ya tienen llamadas o citas registradas (${names}).\n\n` +
+            `¿Eliminarlos de todas formas, borrando TAMBIÉN su historial de llamadas? Esto no se puede deshacer.`,
+        );
+        if (confirmForce) {
+          const forced = await api.post<BulkDeleteResult>("/prospects/bulk-delete", {
+            ids: result.blocked.map((b) => b.id),
+            force: true,
+          });
+          finalDeleted += forced.deletedCount;
+        }
+      }
+
+      setBulkMessage(`Se eliminaron ${finalDeleted} prospectos.`);
+      load();
+    } catch (err) {
+      setDeleteError(err instanceof ApiError ? err.message : "Error al eliminar los prospectos seleccionados");
+    } finally {
+      setBulkDeleting(false);
+    }
+  }
+
   return (
     <div>
       <div className="mb-6 flex items-center justify-between">
@@ -94,12 +155,29 @@ export default function ProspectsPage() {
 
       {importResult && <p className="mb-4 text-sm text-emerald-600">{importResult}</p>}
       {importError && <p className="mb-4 text-sm text-red-600">{importError}</p>}
+      {bulkMessage && <p className="mb-4 text-sm text-emerald-600">{bulkMessage}</p>}
       {deleteError && <p className="mb-4 text-sm text-red-600">{deleteError}</p>}
+
+      {selectedIds.size > 0 && (
+        <div className="mb-4 flex items-center justify-between rounded-md bg-slate-100 px-4 py-2">
+          <p className="text-sm text-slate-700">{selectedIds.size} seleccionados</p>
+          <button className="btn-danger" disabled={bulkDeleting} onClick={handleBulkDelete}>
+            {bulkDeleting ? "Eliminando..." : "Eliminar seleccionados"}
+          </button>
+        </div>
+      )}
 
       <div className="card overflow-x-auto">
         <table className="table-base">
           <thead>
             <tr>
+              <th>
+                <input
+                  type="checkbox"
+                  checked={Boolean(prospects?.length) && selectedIds.size === prospects?.length}
+                  onChange={toggleSelectAll}
+                />
+              </th>
               <th>Nombre</th>
               <th>Teléfono</th>
               <th>Empresa</th>
@@ -113,6 +191,9 @@ export default function ProspectsPage() {
           <tbody>
             {prospects?.map((p) => (
               <tr key={p.id}>
+                <td>
+                  <input type="checkbox" checked={selectedIds.has(p.id)} onChange={() => toggleSelected(p.id)} />
+                </td>
                 <td className="font-medium">{p.name}</td>
                 <td>{p.phoneE164}</td>
                 <td>{p.company}</td>
@@ -137,7 +218,7 @@ export default function ProspectsPage() {
             ))}
             {prospects?.length === 0 && (
               <tr>
-                <td colSpan={8} className="py-6 text-center text-slate-400">
+                <td colSpan={9} className="py-6 text-center text-slate-400">
                   Aún no hay prospectos. Crea uno o importa un CSV.
                 </td>
               </tr>

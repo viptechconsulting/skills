@@ -17,6 +17,11 @@ const listProspectsQuerySchema = z.object({
   status: z.enum(PROSPECT_STATUSES).optional(),
 });
 
+const bulkDeleteProspectsSchema = z.object({
+  ids: z.array(z.string().uuid()).min(1).max(500),
+  force: z.boolean().optional().default(false),
+});
+
 export async function prospectRoutes(fastify: FastifyInstance): Promise<void> {
   fastify.addHook("preHandler", fastify.authenticate);
 
@@ -255,6 +260,60 @@ export async function prospectRoutes(fastify: FastifyInstance): Promise<void> {
     });
 
     return reply.send({ ok: true });
+  });
+
+  fastify.post("/prospects/bulk-delete", { preHandler: fastify.requireRole(["owner", "admin"]) }, async (request, reply) => {
+    const organizationId = request.auth!.organizationId;
+    const parsed = bulkDeleteProspectsSchema.safeParse(request.body);
+    if (!parsed.success) {
+      return reply.code(400).send({ error: "VALIDATION_ERROR", details: parsed.error.issues });
+    }
+    const { ids, force } = parsed.data;
+
+    const prospects = await prisma.prospect.findMany({ where: { id: { in: ids }, organizationId } });
+    const foundIds = new Set(prospects.map((p) => p.id));
+
+    const blocked: Array<{ id: string; name: string }> = [];
+    let deletedCount = 0;
+
+    for (const prospect of prospects) {
+      try {
+        if (force) {
+          // Igual que el borrado individual forzado: se lleva también el
+          // historial de llamadas/citas. Solo se llega acá si el usuario
+          // confirmó explícitamente borrar ese historial a propósito.
+          await prisma.$transaction([
+            prisma.call.deleteMany({ where: { prospectId: prospect.id, organizationId } }),
+            prisma.appointment.deleteMany({ where: { prospectId: prospect.id, organizationId } }),
+            prisma.prospect.delete({ where: { id: prospect.id } }),
+          ]);
+        } else {
+          await prisma.prospect.delete({ where: { id: prospect.id } });
+        }
+        deletedCount += 1;
+      } catch (error) {
+        if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2003") {
+          blocked.push({ id: prospect.id, name: prospect.name });
+        } else {
+          throw error;
+        }
+      }
+    }
+
+    await recordAuditLog(prisma, {
+      organizationId,
+      actorUserId: request.auth!.userId,
+      entityType: "prospect",
+      entityId: "bulk",
+      action: force ? "bulk_delete_forced_with_history" : "bulk_delete",
+      after: { requestedIds: ids, deletedCount, blockedIds: blocked.map((b) => b.id) } as never,
+    });
+
+    return reply.send({
+      deletedCount,
+      blocked,
+      notFound: ids.filter((id) => !foundIds.has(id)),
+    });
   });
 
   fastify.delete("/prospects/:id", { preHandler: fastify.requireRole(["owner", "admin"]) }, async (request, reply) => {

@@ -36,6 +36,7 @@ interface Prospect {
   desiredOutcome: string;
   context: string;
   campaignId: string | null;
+  consentGiven: boolean;
 }
 
 interface ProspectEditForm {
@@ -46,6 +47,7 @@ interface ProspectEditForm {
   intent: string;
   desiredOutcome: string;
   context: string;
+  consentGiven: boolean;
 }
 
 function toEditForm(prospect: Prospect): ProspectEditForm {
@@ -57,6 +59,7 @@ function toEditForm(prospect: Prospect): ProspectEditForm {
     intent: prospect.intent,
     desiredOutcome: prospect.desiredOutcome,
     context: prospect.context,
+    consentGiven: prospect.consentGiven,
   };
 }
 
@@ -132,6 +135,7 @@ export default function ProspectDetailPage() {
           intent: editForm.intent,
           desiredOutcome: editForm.desiredOutcome,
           context: editForm.context,
+          consentGiven: editForm.consentGiven,
         }),
       "Información del prospecto actualizada",
     );
@@ -205,6 +209,15 @@ export default function ProspectDetailPage() {
         </button>
       </div>
 
+      {!prospect.consentGiven && (
+        <div className="card mb-6 border border-amber-300 bg-amber-50">
+          <p className="text-sm text-amber-800">
+            El prospecto no tiene consentimiento registrado. No se lo va a poder llamar mientras la campaña
+            requiera consentimiento explícito.
+          </p>
+        </div>
+      )}
+
       {editForm && (
         <div className="card mb-6">
           <h2 className="mb-3 font-semibold">Información del prospecto</h2>
@@ -274,6 +287,17 @@ export default function ProspectDetailPage() {
               onChange={(e) => setEditForm((f) => (f ? { ...f, context: e.target.value } : f))}
             />
           </div>
+          <label className="mt-3 flex items-center gap-2 text-sm">
+            <input
+              type="checkbox"
+              checked={editForm.consentGiven}
+              onChange={(e) => setEditForm((f) => (f ? { ...f, consentGiven: e.target.checked } : f))}
+            />
+            Tengo evidencia de que el prospecto autorizó recibir esta llamada
+          </label>
+          {!editForm.consentGiven && (
+            <p className="mt-1 text-xs text-amber-700">El prospecto no tiene consentimiento registrado.</p>
+          )}
           <button className="btn-primary mt-3" onClick={handleSaveEdit}>
             Guardar cambios
           </button>
