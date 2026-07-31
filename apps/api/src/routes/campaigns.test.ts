@@ -115,4 +115,99 @@ describe("campaign routes: llamada de prueba", () => {
     const list = await app.inject({ method: "GET", url: "/prospects", headers: { cookie } });
     expect(list.json().prospects).toHaveLength(0);
   });
+
+  it("permite repetir una llamada de prueba al mismo número sin romper por prospecto duplicado", async () => {
+    const { cookie, organizationId } = await registerAndGetCookie("campaign-test-call-repeat@test.com");
+    const { phoneNumber, voiceAgent } = await createPhoneAndAgent(organizationId);
+    const campaignResponse = await app.inject({
+      method: "POST",
+      url: "/campaigns",
+      headers: { cookie },
+      payload: {
+        name: "Campaña",
+        language: "es",
+        objective: "Objetivo",
+        allowedWindow: { start: "09:00", end: "18:00" },
+        timezoneDefault: "America/Bogota",
+        outboundPhoneNumberId: phoneNumber.id,
+        maxAttempts: 3,
+        attemptIntervalMinutes: 60,
+        voiceAgentId: voiceAgent.id,
+        agentInstructions: "Instrucciones",
+      },
+    });
+    const campaignId = campaignResponse.json().campaign.id;
+
+    const first = await app.inject({
+      method: "POST",
+      url: `/campaigns/${campaignId}/test-call`,
+      headers: { cookie },
+      payload: { phone: "+14155550113" },
+    });
+    const second = await app.inject({
+      method: "POST",
+      url: `/campaigns/${campaignId}/test-call`,
+      headers: { cookie },
+      payload: { phone: "+14155550113" },
+    });
+
+    expect(first.statusCode).toBe(202);
+    expect(second.statusCode).toBe(202);
+    // Mismo prospecto reutilizado, no un P2002 por (organizationId, phoneE164) duplicado.
+    expect(second.json().call.prospectId).toBe(first.json().call.prospectId);
+  });
+
+  it("prueba una campaña con el número de un prospecto real sin modificarlo", async () => {
+    const { cookie, organizationId } = await registerAndGetCookie("campaign-test-call-real-prospect@test.com");
+    const { phoneNumber, voiceAgent } = await createPhoneAndAgent(organizationId);
+    const campaignResponse = await app.inject({
+      method: "POST",
+      url: "/campaigns",
+      headers: { cookie },
+      payload: {
+        name: "Campaña",
+        language: "es",
+        objective: "Objetivo",
+        allowedWindow: { start: "09:00", end: "18:00" },
+        timezoneDefault: "America/Bogota",
+        outboundPhoneNumberId: phoneNumber.id,
+        maxAttempts: 3,
+        attemptIntervalMinutes: 60,
+        voiceAgentId: voiceAgent.id,
+        agentInstructions: "Instrucciones",
+      },
+    });
+    const campaignId = campaignResponse.json().campaign.id;
+
+    const realProspect = await prisma.prospect.create({
+      data: {
+        organizationId,
+        campaignId,
+        name: "Prospecto real",
+        phoneE164: "+14155550114",
+        language: "es",
+        timezone: "America/Bogota",
+        intent: "Intención real",
+        desiredOutcome: "Resultado real",
+        source: "csv",
+        consentGiven: false,
+        status: "new",
+      },
+    });
+
+    const testCallResponse = await app.inject({
+      method: "POST",
+      url: `/campaigns/${campaignId}/test-call`,
+      headers: { cookie },
+      payload: { phone: "+14155550114" },
+    });
+
+    expect(testCallResponse.statusCode).toBe(202);
+    expect(testCallResponse.json().call.prospectId).toBe(realProspect.id);
+
+    const untouched = await prisma.prospect.findUniqueOrThrow({ where: { id: realProspect.id } });
+    expect(untouched.isTest).toBe(false);
+    expect(untouched.consentGiven).toBe(false);
+    expect(untouched.name).toBe("Prospecto real");
+  });
 });

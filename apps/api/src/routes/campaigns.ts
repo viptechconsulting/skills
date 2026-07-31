@@ -171,25 +171,28 @@ export async function campaignRoutes(fastify: FastifyInstance): Promise<void> {
       return reply.code(400).send({ error: "INVALID_PHONE_NUMBER", reason: normalized.reason });
     }
 
-    // Se crea un prospecto sintético (isTest) por llamada de prueba en vez de
-    // reusar uno: así cada prueba queda con su propio historial de llamada
-    // sin arrastrar attemptCount ni contexto de una prueba anterior.
-    const testProspect = await prisma.prospect.create({
-      data: {
-        organizationId,
-        campaignId: campaign.id,
-        name: "Llamada de prueba",
-        phoneE164: normalized.e164,
-        language: campaign.language,
-        timezone: campaign.timezoneDefault,
-        intent: "Prueba de campaña antes de lanzarla",
-        desiredOutcome: "Validar el guion, el tono y la configuración antes de activarla con prospectos reales",
-        source: "test",
-        consentGiven: true,
-        status: "queued",
-        isTest: true,
-      },
-    });
+    // phoneE164 es único por organización: si ese número ya existe (un
+    // prospecto real, o el de una prueba anterior), se reutiliza tal cual en
+    // vez de intentar crear uno nuevo — y sobre todo, sin tocar sus datos si
+    // es un prospecto real.
+    const testProspect =
+      (await prisma.prospect.findFirst({ where: { organizationId, phoneE164: normalized.e164 } })) ??
+      (await prisma.prospect.create({
+        data: {
+          organizationId,
+          campaignId: campaign.id,
+          name: "Llamada de prueba",
+          phoneE164: normalized.e164,
+          language: campaign.language,
+          timezone: campaign.timezoneDefault,
+          intent: "Prueba de campaña antes de lanzarla",
+          desiredOutcome: "Validar el guion, el tono y la configuración antes de activarla con prospectos reales",
+          source: "test",
+          consentGiven: true,
+          status: "queued",
+          isTest: true,
+        },
+      }));
 
     const call = await prisma.call.create({
       data: {

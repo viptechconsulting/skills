@@ -148,22 +148,28 @@ export async function voiceAgentRoutes(fastify: FastifyInstance): Promise<void> 
       sandboxCampaign = await prisma.campaign.update({ where: { id: sandboxCampaign.id }, data: sandboxData });
     }
 
-    const testProspect = await prisma.prospect.create({
-      data: {
-        organizationId,
-        campaignId: sandboxCampaign.id,
-        name: "Prueba de agente de voz",
-        phoneE164: normalized.e164,
-        language: voiceAgent.defaultLanguage,
-        timezone: sandboxCampaign.timezoneDefault,
-        intent: "Prueba de agente de voz",
-        desiredOutcome: "Escuchar la personalidad, el tono y la voz configurados",
-        source: "test",
-        consentGiven: true,
-        status: "queued",
-        isTest: true,
-      },
-    });
+    // phoneE164 es único por organización: si ese número ya existe (un
+    // prospecto real, o el de una prueba anterior), se reutiliza tal cual en
+    // vez de intentar crear uno nuevo — y sobre todo, sin tocar sus datos si
+    // es un prospecto real.
+    const testProspect =
+      (await prisma.prospect.findFirst({ where: { organizationId, phoneE164: normalized.e164 } })) ??
+      (await prisma.prospect.create({
+        data: {
+          organizationId,
+          campaignId: sandboxCampaign.id,
+          name: "Prueba de agente de voz",
+          phoneE164: normalized.e164,
+          language: voiceAgent.defaultLanguage,
+          timezone: sandboxCampaign.timezoneDefault,
+          intent: "Prueba de agente de voz",
+          desiredOutcome: "Escuchar la personalidad, el tono y la voz configurados",
+          source: "test",
+          consentGiven: true,
+          status: "queued",
+          isTest: true,
+        },
+      }));
 
     const call = await prisma.call.create({
       data: {
