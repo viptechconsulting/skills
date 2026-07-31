@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import { api, ApiError } from "@/lib/apiClient";
 import { StatCard } from "@/components/StatCard";
 
@@ -92,6 +92,7 @@ function toEditForm(campaign: Campaign): CampaignEditForm {
 
 export default function CampaignDetailPage() {
   const params = useParams<{ id: string }>();
+  const router = useRouter();
   const [campaign, setCampaign] = useState<Campaign | null>(null);
   const [analytics, setAnalytics] = useState<Analytics | null>(null);
   const [phoneNumbers, setPhoneNumbers] = useState<PhoneNumberOption[]>([]);
@@ -99,6 +100,9 @@ export default function CampaignDetailPage() {
   const [editForm, setEditForm] = useState<CampaignEditForm | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
+  const [testPhone, setTestPhone] = useState("");
+  const [testCallError, setTestCallError] = useState<string | null>(null);
+  const [testCallLoading, setTestCallLoading] = useState(false);
 
   async function load() {
     const { campaign } = await api.get<{ campaign: Campaign }>(`/campaigns/${params.id}`);
@@ -144,6 +148,22 @@ export default function CampaignDetailPage() {
       load();
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Error al archivar la campaña");
+    }
+  }
+
+  async function handleTestCall() {
+    if (!campaign || !testPhone.trim()) return;
+    setTestCallError(null);
+    setTestCallLoading(true);
+    try {
+      const { call } = await api.post<{ call: { id: string } }>(`/campaigns/${campaign.id}/test-call`, {
+        phone: testPhone.trim(),
+      });
+      router.push(`/calls/${call.id}`);
+    } catch (err) {
+      setTestCallError(err instanceof ApiError ? err.message : "Error al iniciar la llamada de prueba");
+    } finally {
+      setTestCallLoading(false);
     }
   }
 
@@ -216,6 +236,26 @@ export default function CampaignDetailPage() {
       )}
 
       {message && <p className="mb-4 text-sm text-emerald-600">{message}</p>}
+
+      <div className="card mb-6 space-y-3">
+        <h2 className="font-semibold">Probar campaña</h2>
+        <p className="text-sm text-slate-500">
+          Hacé una llamada de prueba real con la configuración actual de esta campaña (guion, agente de voz, número
+          de salida) sin necesidad de activarla ni usar un prospecto real.
+        </p>
+        <div className="flex items-center gap-2">
+          <input
+            className="input max-w-xs"
+            placeholder="+1 555 123 4567"
+            value={testPhone}
+            onChange={(e) => setTestPhone(e.target.value)}
+          />
+          <button className="btn-primary" disabled={testCallLoading || !testPhone.trim()} onClick={handleTestCall}>
+            {testCallLoading ? "Llamando..." : "Llamar ahora"}
+          </button>
+        </div>
+        {testCallError && <p className="text-sm text-red-600">{testCallError}</p>}
+      </div>
 
       <div className="card">
         <h2 className="mb-3 font-semibold">Editar campaña</h2>

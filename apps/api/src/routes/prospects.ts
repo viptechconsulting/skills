@@ -30,6 +30,9 @@ export async function prospectRoutes(fastify: FastifyInstance): Promise<void> {
     const prospects = await prisma.prospect.findMany({
       where: {
         organizationId,
+        // Contactos sintéticos creados por "Llamar de prueba" — nunca son
+        // prospectos reales, no deben aparecer en este listado.
+        isTest: false,
         ...(query.campaignId ? { campaignId: query.campaignId } : {}),
         ...(query.status ? { status: query.status } : {}),
       },

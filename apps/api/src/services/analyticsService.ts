@@ -21,7 +21,9 @@ export interface CampaignAnalytics {
 const HUMAN_CONVERSATION_STATUSES = ["human_detected", "in_progress", "transferring", "completed"] as const;
 
 export async function computeCampaignAnalytics(organizationId: string, campaignId: string): Promise<CampaignAnalytics> {
-  const calls = await prisma.call.findMany({ where: { organizationId, campaignId } });
+  // isTest: llamadas disparadas manualmente por "Probar campaña" — no son
+  // volumen real de la campaña y distorsionarían el costo/tasa de conversión.
+  const calls = await prisma.call.findMany({ where: { organizationId, campaignId, isTest: false } });
 
   const scheduled = calls.filter((c) => c.status === "scheduled" || c.status === "queued").length;
   const attempted = calls.filter((c) => c.status !== "draft" && c.status !== "eligibility_failed").length;
@@ -68,7 +70,7 @@ export async function computeCampaignAnalytics(organizationId: string, campaignI
 }
 
 export async function computeOrganizationAnalytics(organizationId: string): Promise<CampaignAnalytics> {
-  const campaigns = await prisma.campaign.findMany({ where: { organizationId }, select: { id: true } });
+  const campaigns = await prisma.campaign.findMany({ where: { organizationId, isTest: false }, select: { id: true } });
   const perCampaign = await Promise.all(campaigns.map((c) => computeCampaignAnalytics(organizationId, c.id)));
 
   return perCampaign.reduce<CampaignAnalytics>(

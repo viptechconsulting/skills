@@ -183,6 +183,10 @@ model Campaign {
   simulationMode         Boolean        @default(true)
   consentRequired        Boolean        @default(true)
   transferToPhoneNumber  String?
+  /// Campaña sandbox oculta usada internamente por "Probar agente de voz"
+  /// (POST /voice-agents/:id/test-call). Nunca se muestra en la lista de
+  /// campañas ni cuenta para analíticas.
+  isTest                 Boolean        @default(false)
   createdAt              DateTime       @default(now())
   updatedAt              DateTime       @updatedAt
 
@@ -256,6 +260,10 @@ model Prospect {
   nextAttemptAt  DateTime?
   finalOutcome   String?
   isBlocked      Boolean        @default(false)
+  /// Contacto sintético creado por "Llamar de prueba" (campaña o agente de
+  /// voz) — nunca es un prospecto real, se excluye de /prospects y de las
+  /// analíticas de campaña.
+  isTest         Boolean        @default(false)
   createdAt      DateTime       @default(now())
   updatedAt      DateTime       @updatedAt
 
@@ -350,6 +358,12 @@ model Call {
   nextStep                   String?
   simulation                 Boolean      @default(true)
   eligibilityRejectionReason String?
+  /// Llamada de prueba iniciada manualmente desde "Probar campaña" o
+  /// "Probar agente de voz": se despacha sin pasar por el motor de
+  /// elegibilidad (consentimiento, ventana horaria, DNC, máximo de
+  /// intentos) y no cuenta para analíticas ni para el conteo de intentos
+  /// del prospecto real.
+  isTest                     Boolean      @default(false)
   createdAt                  DateTime     @default(now())
   updatedAt                  DateTime     @updatedAt
 

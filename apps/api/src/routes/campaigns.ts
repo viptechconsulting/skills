@@ -1,7 +1,14 @@
 import type { FastifyInstance } from "fastify";
+import { z } from "zod";
 import { prisma } from "@lynkro-outbound/db";
-import { createCampaignSchema, updateCampaignSchema } from "@lynkro-outbound/shared";
+import { createCampaignSchema, updateCampaignSchema, normalizePhoneToE164 } from "@lynkro-outbound/shared";
 import { recordAuditLog } from "@lynkro-outbound/db";
+import { enqueueCallDispatch } from "../lib/queues.js";
+
+const testCallSchema = z.object({
+  phone: z.string().min(3),
+  defaultCountry: z.string().length(2).optional(),
+});
 
 export async function campaignRoutes(fastify: FastifyInstance): Promise<void> {
   fastify.addHook("preHandler", fastify.authenticate);
@@ -9,7 +16,9 @@ export async function campaignRoutes(fastify: FastifyInstance): Promise<void> {
   fastify.get("/campaigns", async (request, reply) => {
     const organizationId = request.auth!.organizationId;
     const campaigns = await prisma.campaign.findMany({
-      where: { organizationId },
+      // isTest: campaña sandbox oculta usada por "Probar agente de voz" —
+      // nunca debe aparecer como una campaña real en el panel.
+      where: { organizationId, isTest: false },
       orderBy: { createdAt: "desc" },
       include: { retryPolicies: true },
     });
@@ -144,6 +153,60 @@ export async function campaignRoutes(fastify: FastifyInstance): Promise<void> {
     });
 
     return reply.send({ campaign: after });
+  });
+
+  fastify.post("/campaigns/:id/test-call", { preHandler: fastify.requireRole(["owner", "admin"]) }, async (request, reply) => {
+    const organizationId = request.auth!.organizationId;
+    const { id } = request.params as { id: string };
+    const parsed = testCallSchema.safeParse(request.body);
+    if (!parsed.success) {
+      return reply.code(400).send({ error: "VALIDATION_ERROR", details: parsed.error.issues });
+    }
+
+    const campaign = await prisma.campaign.findFirst({ where: { id, organizationId } });
+    if (!campaign) return reply.code(404).send({ error: "CAMPAIGN_NOT_FOUND" });
+
+    const normalized = normalizePhoneToE164(parsed.data.phone, parsed.data.defaultCountry as never);
+    if (!normalized.ok || !normalized.e164) {
+      return reply.code(400).send({ error: "INVALID_PHONE_NUMBER", reason: normalized.reason });
+    }
+
+    // Se crea un prospecto sintético (isTest) por llamada de prueba en vez de
+    // reusar uno: así cada prueba queda con su propio historial de llamada
+    // sin arrastrar attemptCount ni contexto de una prueba anterior.
+    const testProspect = await prisma.prospect.create({
+      data: {
+        organizationId,
+        campaignId: campaign.id,
+        name: "Llamada de prueba",
+        phoneE164: normalized.e164,
+        language: campaign.language,
+        timezone: campaign.timezoneDefault,
+        intent: "Prueba de campaña antes de lanzarla",
+        desiredOutcome: "Validar el guion, el tono y la configuración antes de activarla con prospectos reales",
+        source: "test",
+        consentGiven: true,
+        status: "queued",
+        isTest: true,
+      },
+    });
+
+    const call = await prisma.call.create({
+      data: {
+        organizationId,
+        campaignId: campaign.id,
+        prospectId: testProspect.id,
+        phoneNumberId: campaign.outboundPhoneNumberId,
+        status: "queued",
+        attemptNumber: 1,
+        simulation: campaign.simulationMode,
+        isTest: true,
+      },
+    });
+
+    await enqueueCallDispatch({ callId: call.id, organizationId, reason: "test" });
+
+    return reply.code(202).send({ call });
   });
 
   fastify.delete("/campaigns/:id", { preHandler: fastify.requireRole(["owner", "admin"]) }, async (request, reply) => {

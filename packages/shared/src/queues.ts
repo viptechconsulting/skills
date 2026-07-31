@@ -13,7 +13,7 @@ export const QUEUE_NAMES = {
 export const callDispatchJobSchema = z.object({
   callId: z.string().uuid(),
   organizationId: z.string().uuid(),
-  reason: z.enum(["manual", "scheduled", "retry"]),
+  reason: z.enum(["manual", "scheduled", "retry", "test"]),
 });
 export type CallDispatchJob = z.infer<typeof callDispatchJobSchema>;
 

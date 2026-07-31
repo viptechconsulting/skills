@@ -11,6 +11,12 @@ import { runSimulatedCall } from "../simulation/simulationCallRunner.js";
  * encolar, porque el tiempo transcurrido pudo invalidarla) antes de
  * originar la llamada real o, en modo simulación, ejecutar el guion
  * simulado de punta a punta.
+ *
+ * Excepción: las llamadas de prueba (`call.isTest`, creadas por "Probar
+ * campaña" / "Probar agente de voz") se saltan el motor de elegibilidad por
+ * completo — el usuario las dispara a propósito para validar configuración
+ * antes de lanzar, no tiene sentido bloquearlas por consentimiento, ventana
+ * horaria o máximo de intentos de un contacto sintético.
  */
 export async function processCallDispatch(job: CallDispatchJob): Promise<void> {
   const call = await prisma.call.findFirst({ where: { id: job.callId, organizationId: job.organizationId } });
@@ -23,25 +29,35 @@ export async function processCallDispatch(job: CallDispatchJob): Promise<void> {
     return;
   }
 
-  const eligibility = await checkProspectEligibility(job.organizationId, call.prospectId, {
-    excludeCallId: call.id,
-  });
-  if (!eligibility || !eligibility.result.eligible) {
-    await transitionCall({
-      organizationId: job.organizationId,
-      callId: call.id,
-      toStatus: "eligibility_failed",
-      causedBy: "worker-eligibility-recheck",
-      payload: { reason: eligibility?.result.reason },
-    });
-    await prisma.call.update({
-      where: { id: call.id },
-      data: { eligibilityRejectionReason: eligibility?.result.reason ?? "UNKNOWN" },
-    });
-    return;
-  }
+  let campaign;
+  let prospect;
 
-  const { campaign, prospect } = eligibility;
+  if (call.isTest) {
+    [campaign, prospect] = await Promise.all([
+      prisma.campaign.findUniqueOrThrow({ where: { id: call.campaignId } }),
+      prisma.prospect.findUniqueOrThrow({ where: { id: call.prospectId } }),
+    ]);
+  } else {
+    const eligibility = await checkProspectEligibility(job.organizationId, call.prospectId, {
+      excludeCallId: call.id,
+    });
+    if (!eligibility || !eligibility.result.eligible) {
+      await transitionCall({
+        organizationId: job.organizationId,
+        callId: call.id,
+        toStatus: "eligibility_failed",
+        causedBy: "worker-eligibility-recheck",
+        payload: { reason: eligibility?.result.reason },
+      });
+      await prisma.call.update({
+        where: { id: call.id },
+        data: { eligibilityRejectionReason: eligibility?.result.reason ?? "UNKNOWN" },
+      });
+      return;
+    }
+    campaign = eligibility.campaign;
+    prospect = eligibility.prospect;
+  }
 
   // A partir de aquí la llamada pasa a "dialing" (única transición válida
   // desde "queued" antes de fallar): así, si construir los adaptadores o el

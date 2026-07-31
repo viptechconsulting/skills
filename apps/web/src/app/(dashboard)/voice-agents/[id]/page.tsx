@@ -19,6 +19,12 @@ interface DependentCampaign {
   name: string;
 }
 
+interface PhoneNumberOption {
+  id: string;
+  e164: string;
+  label: string;
+}
+
 const VOICE_OPTIONS = ["alloy", "echo", "shimmer", "ash", "ballad", "coral", "sage", "verse", "marin", "cedar"];
 
 export default function VoiceAgentDetailPage() {
@@ -30,12 +36,20 @@ export default function VoiceAgentDetailPage() {
   const [message, setMessage] = useState<string | null>(null);
   const [dependentCampaigns, setDependentCampaigns] = useState<DependentCampaign[] | null>(null);
   const [reassignTargetId, setReassignTargetId] = useState("");
+  const [phoneNumbers, setPhoneNumbers] = useState<PhoneNumberOption[]>([]);
+  const [testPhone, setTestPhone] = useState("");
+  const [testOutboundId, setTestOutboundId] = useState("");
+  const [testCallError, setTestCallError] = useState<string | null>(null);
+  const [testCallLoading, setTestCallLoading] = useState(false);
 
   async function load() {
     const { voiceAgent } = await api.get<{ voiceAgent: VoiceAgent }>(`/voice-agents/${params.id}`);
     setForm(voiceAgent);
     const { voiceAgents } = await api.get<{ voiceAgents: VoiceAgent[] }>("/voice-agents");
     setOtherAgents(voiceAgents.filter((a) => a.id !== voiceAgent.id));
+    const { phoneNumbers } = await api.get<{ phoneNumbers: PhoneNumberOption[] }>("/phone-numbers");
+    setPhoneNumbers(phoneNumbers);
+    setTestOutboundId((current) => current || phoneNumbers[0]?.id || "");
   }
 
   useEffect(() => {
@@ -95,6 +109,23 @@ export default function VoiceAgentDetailPage() {
     }
   }
 
+  async function handleTestCall() {
+    if (!form || !testPhone.trim() || !testOutboundId) return;
+    setTestCallError(null);
+    setTestCallLoading(true);
+    try {
+      const { call } = await api.post<{ call: { id: string } }>(`/voice-agents/${form.id}/test-call`, {
+        phone: testPhone.trim(),
+        outboundPhoneNumberId: testOutboundId,
+      });
+      router.push(`/calls/${call.id}`);
+    } catch (err) {
+      setTestCallError(err instanceof ApiError ? err.message : "Error al iniciar la llamada de prueba");
+    } finally {
+      setTestCallLoading(false);
+    }
+  }
+
   if (error && !form) return <p className="text-sm text-red-600">{error}</p>;
   if (!form) return <p className="text-sm text-slate-500">Cargando...</p>;
 
@@ -145,6 +176,38 @@ export default function VoiceAgentDetailPage() {
           </div>
         </div>
       )}
+
+      <div className="card mb-6 space-y-3">
+        <h2 className="font-semibold">Probar agente de voz</h2>
+        <p className="text-sm text-slate-500">
+          Recibí una llamada real con la voz, personalidad y tono configurados abajo, sin necesidad de una campaña
+          ni un prospecto real.
+        </p>
+        <div className="flex flex-wrap items-center gap-2">
+          <input
+            className="input max-w-xs"
+            placeholder="+1 555 123 4567"
+            value={testPhone}
+            onChange={(e) => setTestPhone(e.target.value)}
+          />
+          <select className="input max-w-xs" value={testOutboundId} onChange={(e) => setTestOutboundId(e.target.value)}>
+            {phoneNumbers.length === 0 && <option value="">Sin números de salida disponibles</option>}
+            {phoneNumbers.map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.label} ({p.e164})
+              </option>
+            ))}
+          </select>
+          <button
+            className="btn-primary"
+            disabled={testCallLoading || !testPhone.trim() || !testOutboundId}
+            onClick={handleTestCall}
+          >
+            {testCallLoading ? "Llamando..." : "Llamar ahora"}
+          </button>
+        </div>
+        {testCallError && <p className="text-sm text-red-600">{testCallError}</p>}
+      </div>
 
       <div className="card space-y-4">
         <div className="grid grid-cols-2 gap-4">

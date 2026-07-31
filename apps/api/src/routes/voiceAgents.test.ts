@@ -222,4 +222,92 @@ describe("voice agent routes", () => {
     const stillThere = await prisma.voiceAgent.findUnique({ where: { id: oldAgentId } });
     expect(stillThere).not.toBeNull();
   });
+
+  it("prueba un agente de voz suelto creando una campaña sandbox oculta, reutilizada entre pruebas", async () => {
+    const { cookie, organizationId } = await registerAndGetCookie("va-test-call@test.com");
+    const phoneNumber = await prisma.phoneNumber.create({
+      data: { organizationId, e164: "+15005550401", label: "Test" },
+    });
+    const agentA = await app.inject({
+      method: "POST",
+      url: "/voice-agents",
+      headers: { cookie },
+      payload: { name: "Agente A", persona: "Test", tone: "Cálido" },
+    });
+    const agentAId = agentA.json().voiceAgent.id;
+
+    const firstCall = await app.inject({
+      method: "POST",
+      url: `/voice-agents/${agentAId}/test-call`,
+      headers: { cookie },
+      payload: { phone: "+14155550121", outboundPhoneNumberId: phoneNumber.id },
+    });
+    expect(firstCall.statusCode).toBe(202);
+    expect(firstCall.json().call.isTest).toBe(true);
+
+    const sandboxCampaigns = await prisma.campaign.findMany({ where: { organizationId, isTest: true } });
+    expect(sandboxCampaigns).toHaveLength(1);
+    expect(sandboxCampaigns[0]?.voiceAgentId).toBe(agentAId);
+
+    // La campaña sandbox nunca debe aparecer en el listado de campañas real.
+    const campaignsList = await app.inject({ method: "GET", url: "/campaigns", headers: { cookie } });
+    expect(campaignsList.json().campaigns).toHaveLength(0);
+
+    const agentB = await app.inject({
+      method: "POST",
+      url: "/voice-agents",
+      headers: { cookie },
+      payload: { name: "Agente B", persona: "Test", tone: "Directo" },
+    });
+    const agentBId = agentB.json().voiceAgent.id;
+
+    const secondCall = await app.inject({
+      method: "POST",
+      url: `/voice-agents/${agentBId}/test-call`,
+      headers: { cookie },
+      payload: { phone: "+14155550122", outboundPhoneNumberId: phoneNumber.id },
+    });
+    expect(secondCall.statusCode).toBe(202);
+
+    // Sigue habiendo una sola campaña sandbox, reutilizada, ahora apuntando al agente B.
+    const sandboxAfter = await prisma.campaign.findMany({ where: { organizationId, isTest: true } });
+    expect(sandboxAfter).toHaveLength(1);
+    expect(sandboxAfter[0]?.id).toBe(sandboxCampaigns[0]?.id);
+    expect(sandboxAfter[0]?.voiceAgentId).toBe(agentBId);
+  });
+
+  it("permite borrar un agente que la sandbox usó por última vez, reasignándola a otro agente", async () => {
+    const { cookie, organizationId } = await registerAndGetCookie("va-test-call-delete@test.com");
+    const phoneNumber = await prisma.phoneNumber.create({
+      data: { organizationId, e164: "+15005550402", label: "Test" },
+    });
+    const agentA = await app.inject({
+      method: "POST",
+      url: "/voice-agents",
+      headers: { cookie },
+      payload: { name: "Agente A", persona: "Test" },
+    });
+    const agentAId = agentA.json().voiceAgent.id;
+    await app.inject({
+      method: "POST",
+      url: "/voice-agents",
+      headers: { cookie },
+      payload: { name: "Agente B", persona: "Test" },
+    });
+
+    await app.inject({
+      method: "POST",
+      url: `/voice-agents/${agentAId}/test-call`,
+      headers: { cookie },
+      payload: { phone: "+14155550123", outboundPhoneNumberId: phoneNumber.id },
+    });
+
+    // Nada de esto es una campaña "real" — borrar el agente A no debería
+    // bloquearse por la sandbox que lo usó por última vez.
+    const deleted = await app.inject({ method: "DELETE", url: `/voice-agents/${agentAId}`, headers: { cookie } });
+    expect(deleted.statusCode).toBe(200);
+
+    const sandbox = await prisma.campaign.findFirstOrThrow({ where: { organizationId, isTest: true } });
+    expect(sandbox.voiceAgentId).not.toBe(agentAId);
+  });
 });

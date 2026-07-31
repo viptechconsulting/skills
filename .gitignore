@@ -14,3 +14,4 @@ Caddyfile
 *.tsbuildinfo
 .turbo/
 packages/db/generated/
+dump.rdb
