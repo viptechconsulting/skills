@@ -32,13 +32,22 @@ export interface RealtimeSessionEvents {
   onToolCall: (request: RealtimeToolCallRequest) => void | Promise<void>;
   onTranscriptDelta: (speaker: "agent" | "prospect", text: string) => void;
   /**
-   * Se dispara una vez por respuesta del agente, con el texto completo ya
-   * acumulado (mismo texto que llegó de a poco por onTranscriptDelta).
-   * Opcional: solo lo usan wrappers que reemplazan el audio del proveedor
-   * de IA por otro motor de voz (ver ElevenLabs) y necesitan saber cuándo
-   * una respuesta terminó para sintetizarla completa.
+   * Se dispara UNA vez por respuesta, tan pronto se detecta la primera
+   * oración completa dentro del texto que va llegando de a poco (antes de
+   * que la respuesta termine). Opcional: solo lo usan wrappers que
+   * reemplazan el audio del proveedor de IA por otro motor de voz externo
+   * (ver ElevenLabs), para poder empezar a sintetizar y hablar apenas hay
+   * algo que decir, en vez de esperar la respuesta completa.
    */
-  onAgentUtteranceComplete?: (fullText: string) => void;
+  onAgentFirstSentenceReady?: (sentenceText: string) => void;
+  /**
+   * Se dispara una vez por respuesta del agente, al terminar. Si ya se
+   * disparó onAgentFirstSentenceReady para esta respuesta, `text` es solo
+   * el texto RESTANTE después de esa primera oración (para no sintetizarla
+   * dos veces); si no, es el texto completo de la respuesta. Opcional, por
+   * la misma razón que onAgentFirstSentenceReady.
+   */
+  onAgentUtteranceComplete?: (text: string) => void;
   onSpeechStartedByProspect: () => void;
   onError: (error: Error) => void;
   onClose: () => void;

@@ -20,6 +20,20 @@ function toGaAudioFormat(format: "g711_ulaw" | "pcm16"): { type: string } {
   return { type: format === "g711_ulaw" ? "audio/pcmu" : "audio/pcm" };
 }
 
+/**
+ * Busca la primera oración completa al inicio del texto acumulado hasta
+ * ahora (mínimo 8 caracteres antes del punto/signo, para no cortar en
+ * abreviaturas o signos sueltos muy al principio). Devuelve el texto de esa
+ * oración (recortado) y cuántos caracteres del original ocupa —incluyendo el
+ * espacio separador, si lo hay— para poder calcular el resto por slice().
+ * Exportado aparte para poder probarlo sin necesitar una sesión real.
+ */
+export function detectFirstSentenceBoundary(text: string): { sentence: string; sliceLength: number } | null {
+  const match = text.match(/^.{8,}?[.!?](?:\s+|$)/);
+  if (!match) return null;
+  return { sentence: match[0].trim(), sliceLength: match[0].length };
+}
+
 class OpenAIRealtimeSession implements RealtimeSession {
   private ws: WebSocket | null = null;
   private events: RealtimeSessionEvents | null = null;
@@ -28,6 +42,8 @@ class OpenAIRealtimeSession implements RealtimeSession {
   private heartbeatTimer: ReturnType<typeof setInterval> | null = null;
   private hasActiveResponse = false;
   private currentResponseText = "";
+  private firstSentenceEmitted = false;
+  private firstSentenceSliceLength = 0;
 
   constructor(
     private readonly apiConfig: OpenAIRealtimeConfig,
@@ -143,19 +159,38 @@ class OpenAIRealtimeSession implements RealtimeSession {
         if (delta) {
           this.events?.onTranscriptDelta("agent", delta);
           this.currentResponseText += delta;
+          // Apenas se completa la primera oración, se la entrega ya (antes de
+          // que termine toda la respuesta): permite a wrappers como el de
+          // ElevenLabs empezar a sintetizar y hablar de inmediato en vez de
+          // esperar la respuesta completa.
+          if (!this.firstSentenceEmitted) {
+            const boundary = detectFirstSentenceBoundary(this.currentResponseText);
+            if (boundary) {
+              this.firstSentenceEmitted = true;
+              this.firstSentenceSliceLength = boundary.sliceLength;
+              this.events?.onAgentFirstSentenceReady?.(boundary.sentence);
+            }
+          }
         }
         break;
       }
       case "response.created": {
         this.hasActiveResponse = true;
         this.currentResponseText = "";
+        this.firstSentenceEmitted = false;
+        this.firstSentenceSliceLength = 0;
         break;
       }
       case "response.done": {
         this.hasActiveResponse = false;
         if (this.currentResponseText) {
-          this.events?.onAgentUtteranceComplete?.(this.currentResponseText);
+          const remainingText = this.firstSentenceEmitted
+            ? this.currentResponseText.slice(this.firstSentenceSliceLength)
+            : this.currentResponseText;
+          this.events?.onAgentUtteranceComplete?.(remainingText);
           this.currentResponseText = "";
+          this.firstSentenceEmitted = false;
+          this.firstSentenceSliceLength = 0;
         }
         break;
       }

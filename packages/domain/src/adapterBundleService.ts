@@ -1,9 +1,11 @@
 import {
   buildAdapterBundle,
+  buildTelephonyProvider,
   type AdapterBundle,
   type ElevenLabsCredentialPayload,
   type GhlCredentialPayload,
   type OpenAICredentialPayload,
+  type TelephonyProvider,
   type TwilioCredentialPayload,
 } from "@lynkro-outbound/adapters";
 import { getIntegrationCredential } from "./integrationCredentialsService.js";
@@ -38,4 +40,23 @@ export async function getAdapterBundleForOrganization(
     ghl: ghlCreds ?? undefined,
     elevenLabs: elevenLabsCreds ?? undefined,
   });
+}
+
+/**
+ * Construye solo el adaptador de telefonía (para verificar firmas de
+ * webhooks de Twilio y armar TwiML), sin desencriptar ni construir el resto
+ * del bundle. Los webhooks de Twilio están en el camino crítico entre que la
+ * persona atiende y el agente empieza a hablar — pedir el bundle completo
+ * ahí (OpenAI, GHL, ElevenLabs) es trabajo desperdiciado que solo agrega
+ * latencia percibida.
+ */
+export async function getTelephonyProviderForOrganization(
+  organizationId: string,
+  simulationMode: boolean,
+): Promise<TelephonyProvider> {
+  if (simulationMode) {
+    return buildTelephonyProvider({ simulationMode: true });
+  }
+  const twilioCreds = await getIntegrationCredential<TwilioCredentialPayload>(organizationId, "twilio");
+  return buildTelephonyProvider({ simulationMode: false, twilio: twilioCreds ?? undefined });
 }

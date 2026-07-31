@@ -8,7 +8,7 @@ import {
   type CallOutcome,
   type CallStatus,
 } from "@lynkro-outbound/shared";
-import { getAdapterBundleForOrganization } from "@lynkro-outbound/domain";
+import { getTelephonyProviderForOrganization } from "@lynkro-outbound/domain";
 import { transitionCall } from "@lynkro-outbound/domain";
 import { scheduleNextAttemptIfNeeded } from "@lynkro-outbound/domain";
 import { env } from "../config.js";
@@ -47,9 +47,9 @@ async function verifySignatureOrReject(
   organizationId: string,
   simulationMode: boolean,
 ): Promise<boolean> {
-  const bundle = await getAdapterBundleForOrganization(organizationId, simulationMode);
+  const telephony = await getTelephonyProviderForOrganization(organizationId, simulationMode);
   const signatureHeader = request.headers["x-twilio-signature"] as string | undefined;
-  return bundle.telephony.verifyWebhookSignature({
+  return telephony.verifyWebhookSignature({
     url: fullWebhookUrl(request),
     signatureHeader,
     params: request.body as Record<string, string>,
@@ -234,14 +234,24 @@ export async function twilioWebhookRoutes(fastify: FastifyInstance): Promise<voi
       return reply.code(404).send({ error: "CALL_NOT_FOUND" });
     }
 
-    const validSignature = await verifySignatureOrReject(request, call.organizationId, call.simulation);
+    // Este webhook está en el camino crítico entre que la persona atiende y
+    // el agente empieza a hablar: se construye el adaptador de telefonía UNA
+    // sola vez y se reutiliza tanto para verificar la firma como para armar
+    // el TwiML, en vez de reconstruir (y volver a desencriptar credenciales)
+    // dos veces por request.
+    const telephony = await getTelephonyProviderForOrganization(call.organizationId, call.simulation);
+    const signatureHeader = request.headers["x-twilio-signature"] as string | undefined;
+    const validSignature = telephony.verifyWebhookSignature({
+      url: fullWebhookUrl(request),
+      signatureHeader,
+      params: request.body as Record<string, string>,
+    });
     if (!validSignature) {
       return reply.code(403).send({ error: "INVALID_SIGNATURE" });
     }
 
-    const adapters = await getAdapterBundleForOrganization(call.organizationId, call.simulation);
     const wsBaseUrl = env.TWILIO_WEBHOOK_BASE_URL.replace(/^http/, "ws");
-    const twiml = adapters.telephony.buildMediaStreamTwiml({
+    const twiml = telephony.buildMediaStreamTwiml({
       mediaStreamWebSocketUrl: `${wsBaseUrl}/ws/twilio-media/${callId}`,
       callId,
     });

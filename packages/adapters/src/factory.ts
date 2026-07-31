@@ -95,3 +95,19 @@ export function buildAdapterBundle(input: BuildAdapterBundleInput): AdapterBundl
     tts: input.elevenLabs ? new ElevenLabsTtsProvider(input.elevenLabs) : undefined,
   };
 }
+
+/**
+ * Construye solo el adaptador de telefonía, sin el resto del bundle (IA,
+ * CRM, calendario, TTS). Pensado para los webhooks de Twilio, que solo
+ * necesitan verificar la firma y armar TwiML — construir el bundle completo
+ * ahí implica desencriptar y validar credenciales que no se usan para nada,
+ * agregando latencia innecesaria justo en el camino crítico entre que la
+ * persona atiende y el agente empieza a hablar.
+ */
+export function buildTelephonyProvider(input: { simulationMode: boolean; twilio?: TwilioCredentialPayload }): TelephonyProvider {
+  if (input.simulationMode) return new SimulationTelephonyProvider();
+  if (!input.twilio) {
+    throw new Error("Faltan credenciales de Twilio para operar fuera de modo simulación");
+  }
+  return new TwilioTelephonyProvider(input.twilio);
+}

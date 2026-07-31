@@ -18,10 +18,35 @@ export function wrapRealtimeSessionWithElevenLabsVoice(
   voiceId: string,
 ): RealtimeSession {
   let activeStream: TTSStreamHandle | null = null;
+  // Texto que ya está listo pero espera a que termine de sonar el audio en
+  // curso: nunca se sintetizan dos fragmentos en simultáneo (mezclaría dos
+  // streams de audio a la vez), pero sí se empieza a hablar la primera
+  // oración apenas está lista, sin esperar el resto de la respuesta.
+  let pendingText: string | null = null;
+
+  function speak(text: string, events: RealtimeSessionEvents): void {
+    if (!text.trim()) return;
+    activeStream = tts.synthesizeStream(
+      { text, voiceId },
+      {
+        onChunk: events.onAudioChunk,
+        onDone: () => {
+          activeStream = null;
+          if (pendingText !== null) {
+            const next = pendingText;
+            pendingText = null;
+            speak(next, events);
+          }
+        },
+        onError: events.onError,
+      },
+    );
+  }
 
   function cancelActiveStream(): void {
     activeStream?.cancel();
     activeStream = null;
+    pendingText = null;
   }
 
   return {
@@ -38,18 +63,18 @@ export function wrapRealtimeSessionWithElevenLabsVoice(
         },
         onError: events.onError,
         onClose: events.onClose,
-        onAgentUtteranceComplete: (fullText) => {
-          if (!fullText.trim()) return;
-          activeStream = tts.synthesizeStream(
-            { text: fullText, voiceId },
-            {
-              onChunk: events.onAudioChunk,
-              onDone: () => {
-                activeStream = null;
-              },
-              onError: events.onError,
-            },
-          );
+        onAgentFirstSentenceReady: (sentenceText) => {
+          speak(sentenceText, events);
+        },
+        onAgentUtteranceComplete: (text) => {
+          if (!text.trim()) return;
+          if (activeStream) {
+            // La primera oración todavía está sonando: se encola el resto
+            // para que arranque justo al terminar, en el mismo orden.
+            pendingText = text;
+          } else {
+            speak(text, events);
+          }
         },
       });
     },

@@ -148,4 +148,82 @@ describe("wrapRealtimeSessionWithElevenLabsVoice", () => {
     expect(inner.submitToolResult).toHaveBeenCalledWith("call-1", { ok: true });
     expect(inner.close).toHaveBeenCalledTimes(1);
   });
+
+  it("empieza a sintetizar la primera oración apenas está lista, sin esperar el resto de la respuesta", async () => {
+    const inner = createFakeInnerSession();
+    const tts = createFakeTts();
+    const wrapped = wrapRealtimeSessionWithElevenLabsVoice(inner, tts, "voice-abc");
+    await wrapped.start({
+      onAudioChunk: () => undefined,
+      onToolCall: () => undefined,
+      onTranscriptDelta: () => undefined,
+      onSpeechStartedByProspect: () => undefined,
+      onError: () => undefined,
+      onClose: () => undefined,
+    });
+
+    inner.events.onAgentFirstSentenceReady?.("¡Hola Juan!");
+    expect(tts.synthesizeStream).toHaveBeenCalledTimes(1);
+    expect(tts.synthesizeStream).toHaveBeenCalledWith({ text: "¡Hola Juan!", voiceId: "voice-abc" }, expect.anything());
+  });
+
+  it("encola el resto de la respuesta hasta que termina de sonar la primera oración, sin mezclar audio", async () => {
+    const inner = createFakeInnerSession();
+    const tts = createFakeTts();
+    const wrapped = wrapRealtimeSessionWithElevenLabsVoice(inner, tts, "voice-abc");
+    const audioChunks: string[] = [];
+    await wrapped.start({
+      onAudioChunk: (chunk) => audioChunks.push(chunk),
+      onToolCall: () => undefined,
+      onTranscriptDelta: () => undefined,
+      onSpeechStartedByProspect: () => undefined,
+      onError: () => undefined,
+      onClose: () => undefined,
+    });
+
+    inner.events.onAgentFirstSentenceReady?.("¡Hola Juan!");
+    const firstCallbacks = (tts.synthesizeStream as unknown as ReturnType<typeof vi.fn>).mock.calls[0]?.[1] as TTSStreamCallbacks;
+
+    // La respuesta termina de generarse (el resto del texto) mientras la
+    // primera oración todavía está sonando: no debe arrancar un segundo
+    // stream todavía.
+    inner.events.onAgentUtteranceComplete?.(" ¿Cómo estás hoy?");
+    expect(tts.synthesizeStream).toHaveBeenCalledTimes(1);
+
+    firstCallbacks.onChunk("audio-primera-oracion");
+    firstCallbacks.onDone();
+
+    // Recién ahí arranca el segundo fragmento.
+    expect(tts.synthesizeStream).toHaveBeenCalledTimes(2);
+    expect(tts.synthesizeStream).toHaveBeenNthCalledWith(
+      2,
+      { text: " ¿Cómo estás hoy?", voiceId: "voice-abc" },
+      expect.anything(),
+    );
+    expect(audioChunks).toEqual(["audio-primera-oracion"]);
+  });
+
+  it("un barge-in durante la primera oración también descarta el resto ya encolado", async () => {
+    const inner = createFakeInnerSession();
+    const tts = createFakeTts();
+    const wrapped = wrapRealtimeSessionWithElevenLabsVoice(inner, tts, "voice-abc");
+    await wrapped.start({
+      onAudioChunk: () => undefined,
+      onToolCall: () => undefined,
+      onTranscriptDelta: () => undefined,
+      onSpeechStartedByProspect: () => undefined,
+      onError: () => undefined,
+      onClose: () => undefined,
+    });
+
+    inner.events.onAgentFirstSentenceReady?.("¡Hola Juan!");
+    inner.events.onAgentUtteranceComplete?.(" ¿Cómo estás hoy?");
+    const firstCallbacks = (tts.synthesizeStream as unknown as ReturnType<typeof vi.fn>).mock.calls[0]?.[1] as TTSStreamCallbacks;
+
+    inner.events.onSpeechStartedByProspect();
+    // Aunque el primer stream "termine" después de la interrupción, el resto
+    // encolado ya se descartó y no debe arrancar un segundo stream.
+    firstCallbacks.onDone();
+    expect(tts.synthesizeStream).toHaveBeenCalledTimes(1);
+  });
 });
