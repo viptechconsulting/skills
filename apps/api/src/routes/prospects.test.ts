@@ -498,4 +498,68 @@ describe("prospect routes: elegibilidad y acciones", () => {
     expect(response.json()).toMatchObject({ deletedCount: 0, blocked: [], notFound: [otherOrgProspect.id] });
     expect(await prisma.prospect.findUnique({ where: { id: otherOrgProspect.id } })).not.toBeNull();
   });
+
+  it("bulk-consent marca consentGiven y registra la fecha en varios prospectos de una", async () => {
+    const { cookie, organizationId } = await registerAndGetCookie("bulk-consent-ok@test.com");
+    const prospects = await Promise.all(
+      ["+14155559041", "+14155559042"].map((phone, i) =>
+        prisma.prospect.create({
+          data: {
+            organizationId,
+            name: `Prospecto ${i}`,
+            phoneE164: phone,
+            timezone: "America/Bogota",
+            intent: "test",
+            desiredOutcome: "test",
+            source: "test",
+            consentGiven: false,
+          },
+        }),
+      ),
+    );
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/prospects/bulk-consent",
+      headers: { cookie },
+      payload: { ids: prospects.map((p) => p.id), consentGiven: true },
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toMatchObject({ updatedCount: 2 });
+    const updated = await prisma.prospect.findMany({ where: { organizationId } });
+    expect(updated).toHaveLength(2);
+    for (const p of updated) {
+      expect(p.consentGiven).toBe(true);
+      expect(p.consentDate).not.toBeNull();
+    }
+  });
+
+  it("bulk-consent no afecta prospectos de otra organización", async () => {
+    const { cookie } = await registerAndGetCookie("bulk-consent-scoped@test.com");
+    const { organizationId: otherOrgId } = await registerAndGetCookie("bulk-consent-other-org@test.com");
+    const otherOrgProspect = await prisma.prospect.create({
+      data: {
+        organizationId: otherOrgId,
+        name: "De otra organización",
+        phoneE164: "+14155559051",
+        timezone: "America/Bogota",
+        intent: "test",
+        desiredOutcome: "test",
+        source: "test",
+        consentGiven: false,
+      },
+    });
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/prospects/bulk-consent",
+      headers: { cookie },
+      payload: { ids: [otherOrgProspect.id], consentGiven: true },
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toMatchObject({ updatedCount: 0 });
+    expect((await prisma.prospect.findUnique({ where: { id: otherOrgProspect.id } }))?.consentGiven).toBe(false);
+  });
 });

@@ -22,6 +22,11 @@ const bulkDeleteProspectsSchema = z.object({
   force: z.boolean().optional().default(false),
 });
 
+const bulkConsentProspectsSchema = z.object({
+  ids: z.array(z.string().uuid()).min(1).max(500),
+  consentGiven: z.boolean(),
+});
+
 export async function prospectRoutes(fastify: FastifyInstance): Promise<void> {
   fastify.addHook("preHandler", fastify.authenticate);
 
@@ -260,6 +265,34 @@ export async function prospectRoutes(fastify: FastifyInstance): Promise<void> {
     });
 
     return reply.send({ ok: true });
+  });
+
+  fastify.post("/prospects/bulk-consent", async (request, reply) => {
+    const organizationId = request.auth!.organizationId;
+    const parsed = bulkConsentProspectsSchema.safeParse(request.body);
+    if (!parsed.success) {
+      return reply.code(400).send({ error: "VALIDATION_ERROR", details: parsed.error.issues });
+    }
+    const { ids, consentGiven } = parsed.data;
+
+    // Igual que la casilla en la ficha individual: marcar consentimiento
+    // también registra la fecha de esa evidencia; desmarcarlo no la borra
+    // (queda como registro de cuándo se dio, aunque ya no aplique).
+    const updated = await prisma.prospect.updateMany({
+      where: { id: { in: ids }, organizationId },
+      data: consentGiven ? { consentGiven: true, consentDate: new Date() } : { consentGiven: false },
+    });
+
+    await recordAuditLog(prisma, {
+      organizationId,
+      actorUserId: request.auth!.userId,
+      entityType: "prospect",
+      entityId: "bulk",
+      action: consentGiven ? "bulk_mark_consent_given" : "bulk_mark_consent_not_given",
+      after: { requestedIds: ids, updatedCount: updated.count } as never,
+    });
+
+    return reply.send({ updatedCount: updated.count });
   });
 
   fastify.post("/prospects/bulk-delete", { preHandler: fastify.requireRole(["owner", "admin"]) }, async (request, reply) => {

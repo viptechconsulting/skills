@@ -13,6 +13,7 @@ interface Prospect {
   attemptCount: number;
   nextAttemptAt: string | null;
   finalOutcome: string | null;
+  consentGiven: boolean;
 }
 
 interface BulkDeleteResult {
@@ -29,6 +30,7 @@ export default function ProspectsPage() {
   const [bulkMessage, setBulkMessage] = useState<string | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [bulkDeleting, setBulkDeleting] = useState(false);
+  const [bulkMarkingConsent, setBulkMarkingConsent] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   async function load() {
@@ -138,6 +140,26 @@ export default function ProspectsPage() {
     }
   }
 
+  async function handleBulkMarkConsent() {
+    if (selectedIds.size === 0) return;
+    setDeleteError(null);
+    setBulkMessage(null);
+    setBulkMarkingConsent(true);
+    try {
+      const ids = Array.from(selectedIds);
+      const { updatedCount } = await api.post<{ updatedCount: number }>("/prospects/bulk-consent", {
+        ids,
+        consentGiven: true,
+      });
+      setBulkMessage(`Se marcó consentimiento en ${updatedCount} prospectos.`);
+      load();
+    } catch (err) {
+      setDeleteError(err instanceof ApiError ? err.message : "Error al marcar consentimiento en los prospectos seleccionados");
+    } finally {
+      setBulkMarkingConsent(false);
+    }
+  }
+
   return (
     <div>
       <div className="mb-6 flex items-center justify-between">
@@ -161,9 +183,14 @@ export default function ProspectsPage() {
       {selectedIds.size > 0 && (
         <div className="mb-4 flex items-center justify-between rounded-md bg-slate-100 px-4 py-2">
           <p className="text-sm text-slate-700">{selectedIds.size} seleccionados</p>
-          <button className="btn-danger" disabled={bulkDeleting} onClick={handleBulkDelete}>
-            {bulkDeleting ? "Eliminando..." : "Eliminar seleccionados"}
-          </button>
+          <div className="flex gap-2">
+            <button className="btn-secondary" disabled={bulkMarkingConsent} onClick={handleBulkMarkConsent}>
+              {bulkMarkingConsent ? "Marcando..." : "Marcar consentimiento"}
+            </button>
+            <button className="btn-danger" disabled={bulkDeleting} onClick={handleBulkDelete}>
+              {bulkDeleting ? "Eliminando..." : "Eliminar seleccionados"}
+            </button>
+          </div>
         </div>
       )}
 
@@ -182,6 +209,7 @@ export default function ProspectsPage() {
               <th>Teléfono</th>
               <th>Empresa</th>
               <th>Estado</th>
+              <th>Consentimiento</th>
               <th>Intentos</th>
               <th>Próximo intento</th>
               <th>Resultado final</th>
@@ -199,6 +227,13 @@ export default function ProspectsPage() {
                 <td>{p.company}</td>
                 <td>
                   <span className="badge bg-slate-100 text-slate-700">{p.status}</span>
+                </td>
+                <td>
+                  {p.consentGiven ? (
+                    <span className="badge bg-emerald-100 text-emerald-700">Sí</span>
+                  ) : (
+                    <span className="badge bg-amber-100 text-amber-700">No</span>
+                  )}
                 </td>
                 <td>{p.attemptCount}</td>
                 <td>{p.nextAttemptAt ? new Date(p.nextAttemptAt).toLocaleString() : "—"}</td>
@@ -218,7 +253,7 @@ export default function ProspectsPage() {
             ))}
             {prospects?.length === 0 && (
               <tr>
-                <td colSpan={9} className="py-6 text-center text-slate-400">
+                <td colSpan={10} className="py-6 text-center text-slate-400">
                   Aún no hay prospectos. Crea uno o importa un CSV.
                 </td>
               </tr>
