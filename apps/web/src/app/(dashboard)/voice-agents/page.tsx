@@ -13,6 +13,11 @@ interface VoiceAgent {
   voice: string;
 }
 
+interface DependentCampaign {
+  id: string;
+  name: string;
+}
+
 const VOICE_OPTIONS = ["alloy", "echo", "shimmer", "ash", "ballad", "coral", "sage", "verse", "marin", "cedar"];
 
 export default function VoiceAgentsPage() {
@@ -20,6 +25,8 @@ export default function VoiceAgentsPage() {
   const [error, setError] = useState<string | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const [form, setForm] = useState({ name: "", persona: "", tone: "", defaultLanguage: "es", voice: "alloy" });
+  const [reassignFor, setReassignFor] = useState<{ agent: VoiceAgent; campaigns: DependentCampaign[] } | null>(null);
+  const [reassignTargetId, setReassignTargetId] = useState("");
 
   async function load() {
     const { voiceAgents } = await api.get<{ voiceAgents: VoiceAgent[] }>("/voice-agents");
@@ -50,12 +57,28 @@ export default function VoiceAgentsPage() {
       load();
     } catch (err) {
       if (err instanceof ApiError && err.status === 409) {
-        setDeleteError(
-          `"${agent.name}" está en uso por una o más campañas. Cambiá el agente de voz de esas campañas antes de eliminarlo.`,
-        );
+        const campaigns = (err.body as { campaigns?: DependentCampaign[] })?.campaigns ?? [];
+        if (campaigns.length > 0) {
+          setReassignFor({ agent, campaigns });
+          setReassignTargetId("");
+        } else {
+          setDeleteError(`"${agent.name}" está en uso por una o más campañas.`);
+        }
       } else {
         setDeleteError(err instanceof ApiError ? err.message : "Error al eliminar el agente de voz");
       }
+    }
+  }
+
+  async function handleConfirmReassign() {
+    if (!reassignFor || !reassignTargetId) return;
+    setDeleteError(null);
+    try {
+      await api.delete(`/voice-agents/${reassignFor.agent.id}?reassignTo=${reassignTargetId}`);
+      setReassignFor(null);
+      load();
+    } catch (err) {
+      setDeleteError(err instanceof ApiError ? err.message : "Error al reasignar y eliminar el agente de voz");
     }
   }
 
@@ -128,6 +151,39 @@ export default function VoiceAgentsPage() {
       </form>
 
       {deleteError && <p className="mb-4 text-sm text-red-600">{deleteError}</p>}
+
+      {reassignFor && (
+        <div className="card mb-6 space-y-3 border border-amber-300 bg-amber-50">
+          <p className="text-sm text-slate-700">
+            <strong>&quot;{reassignFor.agent.name}&quot;</strong> está en uso por{" "}
+            {reassignFor.campaigns.length === 1 ? "esta campaña" : "estas campañas"}:{" "}
+            {reassignFor.campaigns.map((c) => c.name).join(", ")}. Elegí un agente de reemplazo para esas campañas y
+            se eliminará &quot;{reassignFor.agent.name}&quot; automáticamente.
+          </p>
+          <div className="flex items-center gap-2">
+            <select
+              className="input max-w-xs"
+              value={reassignTargetId}
+              onChange={(e) => setReassignTargetId(e.target.value)}
+            >
+              <option value="">Elegí un agente de reemplazo...</option>
+              {agents
+                ?.filter((a) => a.id !== reassignFor.agent.id)
+                .map((a) => (
+                  <option key={a.id} value={a.id}>
+                    {a.name}
+                  </option>
+                ))}
+            </select>
+            <button className="btn-primary" disabled={!reassignTargetId} onClick={handleConfirmReassign}>
+              Reasignar y eliminar
+            </button>
+            <button className="btn-secondary" onClick={() => setReassignFor(null)}>
+              Cancelar
+            </button>
+          </div>
+        </div>
+      )}
 
       <div className="card overflow-x-auto">
         <table className="table-base">

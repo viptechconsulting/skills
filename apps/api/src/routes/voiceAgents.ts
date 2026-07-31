@@ -78,15 +78,52 @@ export async function voiceAgentRoutes(fastify: FastifyInstance): Promise<void> 
   fastify.delete("/voice-agents/:id", { preHandler: fastify.requireRole(["owner", "admin"]) }, async (request, reply) => {
     const organizationId = request.auth!.organizationId;
     const { id } = request.params as { id: string };
+    const { reassignTo } = request.query as { reassignTo?: string };
 
     const voiceAgent = await prisma.voiceAgent.findFirst({ where: { id, organizationId } });
     if (!voiceAgent) return reply.code(404).send({ error: "VOICE_AGENT_NOT_FOUND" });
+
+    const dependentCampaigns = await prisma.campaign.findMany({
+      where: { organizationId, voiceAgentId: id },
+      select: { id: true, name: true },
+    });
+
+    if (dependentCampaigns.length > 0) {
+      if (!reassignTo) {
+        // Sin reasignación: se informa qué campañas lo bloquean en vez de
+        // solo rechazar — así el panel puede ofrecer directamente el picker
+        // de reemplazo sin una segunda ida y vuelta a preguntar por qué.
+        return reply.code(409).send({ error: "VOICE_AGENT_IN_USE", campaigns: dependentCampaigns });
+      }
+      if (reassignTo === id) {
+        return reply.code(400).send({ error: "REASSIGN_TARGET_SAME_AS_DELETED" });
+      }
+      const replacement = await prisma.voiceAgent.findFirst({ where: { id: reassignTo, organizationId } });
+      if (!replacement) return reply.code(400).send({ error: "REASSIGN_TARGET_NOT_FOUND" });
+
+      await prisma.$transaction([
+        prisma.campaign.updateMany({ where: { organizationId, voiceAgentId: id }, data: { voiceAgentId: reassignTo } }),
+        prisma.voiceAgent.delete({ where: { id } }),
+      ]);
+
+      await recordAuditLog(prisma, {
+        organizationId,
+        actorUserId: request.auth!.userId,
+        entityType: "voice_agent",
+        entityId: id,
+        action: "delete_reassigned",
+        before: voiceAgent as never,
+        after: { reassignedTo: reassignTo, campaignIds: dependentCampaigns.map((c) => c.id) } as never,
+      });
+
+      return reply.send({ ok: true, reassignedCampaigns: dependentCampaigns.length });
+    }
 
     try {
       await prisma.voiceAgent.delete({ where: { id } });
     } catch (error) {
       if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2003") {
-        return reply.code(409).send({ error: "VOICE_AGENT_IN_USE" });
+        return reply.code(409).send({ error: "VOICE_AGENT_IN_USE", campaigns: [] });
       }
       throw error;
     }

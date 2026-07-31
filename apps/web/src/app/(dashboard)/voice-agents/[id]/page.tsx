@@ -14,18 +14,28 @@ interface VoiceAgent {
   voice: string;
 }
 
+interface DependentCampaign {
+  id: string;
+  name: string;
+}
+
 const VOICE_OPTIONS = ["alloy", "echo", "shimmer", "ash", "ballad", "coral", "sage", "verse", "marin", "cedar"];
 
 export default function VoiceAgentDetailPage() {
   const params = useParams<{ id: string }>();
   const router = useRouter();
   const [form, setForm] = useState<VoiceAgent | null>(null);
+  const [otherAgents, setOtherAgents] = useState<VoiceAgent[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
+  const [dependentCampaigns, setDependentCampaigns] = useState<DependentCampaign[] | null>(null);
+  const [reassignTargetId, setReassignTargetId] = useState("");
 
   async function load() {
     const { voiceAgent } = await api.get<{ voiceAgent: VoiceAgent }>(`/voice-agents/${params.id}`);
     setForm(voiceAgent);
+    const { voiceAgents } = await api.get<{ voiceAgents: VoiceAgent[] }>("/voice-agents");
+    setOtherAgents(voiceAgents.filter((a) => a.id !== voiceAgent.id));
   }
 
   useEffect(() => {
@@ -61,10 +71,27 @@ export default function VoiceAgentDetailPage() {
       router.push("/voice-agents");
     } catch (err) {
       if (err instanceof ApiError && err.status === 409) {
-        setError(`"${form.name}" está en uso por una o más campañas. Cambiá el agente de voz de esas campañas antes de eliminarlo.`);
+        const campaigns = (err.body as { campaigns?: DependentCampaign[] })?.campaigns ?? [];
+        if (campaigns.length > 0) {
+          setDependentCampaigns(campaigns);
+          setReassignTargetId("");
+        } else {
+          setError(`"${form.name}" está en uso por una o más campañas.`);
+        }
       } else {
         setError(err instanceof ApiError ? err.message : "Error al eliminar el agente de voz");
       }
+    }
+  }
+
+  async function handleConfirmReassign() {
+    if (!form || !reassignTargetId) return;
+    setError(null);
+    try {
+      await api.delete(`/voice-agents/${form.id}?reassignTo=${reassignTargetId}`);
+      router.push("/voice-agents");
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Error al reasignar y eliminar el agente de voz");
     }
   }
 
@@ -87,6 +114,37 @@ export default function VoiceAgentDetailPage() {
 
       {message && <p className="mb-4 text-sm text-emerald-600">{message}</p>}
       {error && <p className="mb-4 text-sm text-red-600">{error}</p>}
+
+      {dependentCampaigns && (
+        <div className="card mb-6 space-y-3 border border-amber-300 bg-amber-50">
+          <p className="text-sm text-slate-700">
+            <strong>&quot;{form.name}&quot;</strong> está en uso por{" "}
+            {dependentCampaigns.length === 1 ? "esta campaña" : "estas campañas"}:{" "}
+            {dependentCampaigns.map((c) => c.name).join(", ")}. Elegí un agente de reemplazo para esas campañas y se
+            eliminará &quot;{form.name}&quot; automáticamente.
+          </p>
+          <div className="flex items-center gap-2">
+            <select
+              className="input max-w-xs"
+              value={reassignTargetId}
+              onChange={(e) => setReassignTargetId(e.target.value)}
+            >
+              <option value="">Elegí un agente de reemplazo...</option>
+              {otherAgents.map((a) => (
+                <option key={a.id} value={a.id}>
+                  {a.name}
+                </option>
+              ))}
+            </select>
+            <button className="btn-primary" disabled={!reassignTargetId} onClick={handleConfirmReassign}>
+              Reasignar y eliminar
+            </button>
+            <button className="btn-secondary" onClick={() => setDependentCampaigns(null)}>
+              Cancelar
+            </button>
+          </div>
+        </div>
+      )}
 
       <div className="card space-y-4">
         <div className="grid grid-cols-2 gap-4">
