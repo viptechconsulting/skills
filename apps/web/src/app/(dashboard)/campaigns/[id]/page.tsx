@@ -129,6 +129,24 @@ export default function CampaignDetailPage() {
     load();
   }
 
+  async function handleArchive() {
+    if (!campaign) return;
+    if (
+      !window.confirm(
+        `¿Archivar "${campaign.name}"? Dejará de dispatchar llamadas nuevas. El historial de llamadas se conserva.`,
+      )
+    ) {
+      return;
+    }
+    setError(null);
+    try {
+      await api.delete(`/campaigns/${campaign.id}`);
+      load();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Error al archivar la campaña");
+    }
+  }
+
   async function handleSaveEdit() {
     if (!campaign || !editForm) return;
     setError(null);
@@ -171,6 +189,11 @@ export default function CampaignDetailPage() {
           <button className="btn-secondary" onClick={toggleSimulationMode}>
             Cambiar a modo {campaign.simulationMode ? "Real" : "Simulación"}
           </button>
+          {campaign.status !== "archived" && (
+            <button className="btn-secondary text-red-600" onClick={handleArchive}>
+              Archivar campaña
+            </button>
+          )}
         </div>
       </div>
 
