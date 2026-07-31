@@ -33,6 +33,7 @@ export default function NewCampaignPage() {
     maxAttempts: 3,
     attemptIntervalMinutes: 240,
     voiceAgentId: "",
+    targetCalendarId: "",
     agentInstructions: "",
     bookingConditions: "",
     transferConditions: "",
@@ -54,6 +55,7 @@ export default function NewCampaignPage() {
     try {
       const { campaign } = await api.post<{ campaign: { id: string } }>("/campaigns", {
         ...form,
+        targetCalendarId: form.targetCalendarId.trim() || undefined,
         allowedWindow: { start: form.allowedWindowStart, end: form.allowedWindowEnd },
         maxAttempts: Number(form.maxAttempts),
         attemptIntervalMinutes: Number(form.attemptIntervalMinutes),
@@ -174,6 +176,19 @@ export default function NewCampaignPage() {
               </option>
             ))}
           </select>
+        </div>
+        <div>
+          <label className="label" htmlFor="c-calendar">ID de calendario de GoHighLevel (opcional)</label>
+          <input
+            id="c-calendar"
+            className="input"
+            placeholder="Dejalo vacío si esta campaña no agenda citas"
+            value={form.targetCalendarId}
+            onChange={(e) => set("targetCalendarId", e.target.value)}
+          />
+          <p className="mt-1 text-xs text-slate-500">
+            Sin este ID, el agente no va a poder revisar disponibilidad ni agendar citas durante la llamada.
+          </p>
         </div>
         <div className="grid grid-cols-2 gap-4">
           <div>

@@ -19,6 +19,7 @@ interface Campaign {
   attemptIntervalMinutes: number;
   outboundPhoneNumberId: string;
   voiceAgentId: string;
+  targetCalendarId: string | null;
   agentInstructions: string;
   bookingConditions: string;
   transferConditions: string;
@@ -60,6 +61,7 @@ interface CampaignEditForm {
   attemptIntervalMinutes: number;
   outboundPhoneNumberId: string;
   voiceAgentId: string;
+  targetCalendarId: string;
   agentInstructions: string;
   bookingConditions: string;
   transferConditions: string;
@@ -81,6 +83,7 @@ function toEditForm(campaign: Campaign): CampaignEditForm {
     attemptIntervalMinutes: campaign.attemptIntervalMinutes,
     outboundPhoneNumberId: campaign.outboundPhoneNumberId,
     voiceAgentId: campaign.voiceAgentId,
+    targetCalendarId: campaign.targetCalendarId ?? "",
     agentInstructions: campaign.agentInstructions,
     bookingConditions: campaign.bookingConditions,
     transferConditions: campaign.transferConditions,
@@ -174,6 +177,7 @@ export default function CampaignDetailPage() {
     try {
       await api.patch(`/campaigns/${campaign.id}`, {
         ...editForm,
+        targetCalendarId: editForm.targetCalendarId.trim() || undefined,
         allowedWindow: { start: editForm.allowedWindowStart, end: editForm.allowedWindowEnd },
         maxAttempts: Number(editForm.maxAttempts),
         attemptIntervalMinutes: Number(editForm.attemptIntervalMinutes),
@@ -358,6 +362,19 @@ export default function CampaignDetailPage() {
                 </option>
               ))}
             </select>
+          </div>
+          <div>
+            <label className="label" htmlFor="c-calendar">ID de calendario de GoHighLevel (opcional)</label>
+            <input
+              id="c-calendar"
+              className="input"
+              placeholder="Dejalo vacío si esta campaña no agenda citas"
+              value={editForm.targetCalendarId}
+              onChange={(e) => setEditForm((f) => (f ? { ...f, targetCalendarId: e.target.value } : f))}
+            />
+            <p className="mt-1 text-xs text-slate-500">
+              Sin este ID, el agente no va a poder revisar disponibilidad ni agendar citas durante la llamada.
+            </p>
           </div>
           <div className="grid grid-cols-2 gap-4">
             <div>
