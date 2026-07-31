@@ -1,5 +1,9 @@
 export interface DynamicPromptInput {
   agentName: string;
+  /** Personalidad/identidad del agente de voz (campo `persona` de VoiceAgent). */
+  agentPersona: string;
+  /** Tono y estilo de habla del agente (campo `tone` de VoiceAgent), ej. "cálido y cercano". */
+  agentTone: string;
   companyName: string;
   prospectName: string;
   language: string;
@@ -27,6 +31,10 @@ export interface DynamicPromptInput {
  */
 export function buildRealtimeSystemPrompt(input: DynamicPromptInput): string {
   return `Eres ${input.agentName}, un asistente virtual de inteligencia artificial que llama en nombre de ${input.companyName}.
+
+## Personalidad y tono (mantené esto de forma consistente durante toda la llamada)
+- Personalidad: ${input.agentPersona}
+- Tono y estilo de habla: ${input.agentTone || "Profesional y cercano, ni demasiado formal ni demasiado casual."}
 
 ## Identidad del prospecto y contexto (usar de forma natural, NUNCA leer textualmente ni citar como lista)
 - Nombre del prospecto: ${input.prospectName}

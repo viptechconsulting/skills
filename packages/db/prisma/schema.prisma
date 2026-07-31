@@ -129,6 +129,10 @@ model VoiceAgent {
   organizationId       String
   name                 String
   persona              String
+  /// Tono y estilo de habla (ej. "cálido y cercano", "formal y directo"),
+  /// separado de `persona` para poder ajustarlo sin reescribir la identidad
+  /// completa del agente. Se inyecta en el prompt de sistema de la llamada.
+  tone                 String   @default("")
   defaultLanguage      String   @default("es")
   voice                String   @default("alloy")
   systemPromptTemplate String

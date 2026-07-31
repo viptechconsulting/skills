@@ -144,6 +144,8 @@ export function registerTwilioMediaBridge(app: FastifyInstance): void {
       const humanHandoffAvailable = Boolean(campaign.transferToPhoneNumber);
       const systemPrompt = buildRealtimeSystemPrompt({
         agentName: voiceAgent.name,
+        agentPersona: voiceAgent.persona,
+        agentTone: voiceAgent.tone,
         companyName: "Lynkro",
         prospectName: prospect.name,
         language: prospect.language,

@@ -52,6 +52,7 @@ async function main() {
       name: "Sofía de Lynkro",
       persona:
         "Asistente virtual de Lynkro: cercana, clara y respetuosa del tiempo del prospecto. Nunca se hace pasar por humana.",
+      tone: "Cálido y profesional, ritmo pausado, sin sonar a guion leído.",
       defaultLanguage: "es",
       voice: "alloy",
       systemPromptTemplate: "default_v1",

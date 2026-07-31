@@ -33,6 +33,8 @@ export async function runSimulatedCall(input: {
 
   const systemPrompt = buildRealtimeSystemPrompt({
     agentName: voiceAgent?.name ?? "Agente Lynkro",
+    agentPersona: voiceAgent?.persona ?? "Asistente de ventas profesional y cordial.",
+    agentTone: voiceAgent?.tone ?? "",
     companyName: "Lynkro",
     prospectName: prospect.name,
     language: prospect.language,
