@@ -1,0 +1,119 @@
+name: lynkro-outbound
+
+# Pensado para desplegarse como servicio "Compose" dentro de un proyecto de
+# EasyPanel que YA tiene Traefik corriendo (ver docker-compose.prod.yml para
+# el caso de un VPS sin panel, con Caddy propio). Por eso:
+#   - No hay servicio de Caddy: Traefik enruta los dominios que se configuren
+#     en la pestaña "Domains" del proyecto en EasyPanel.
+#   - Ningún servicio publica puertos al host (`ports:`): Traefik y los
+#     servicios entre sí se alcanzan por la red interna de Docker que
+#     EasyPanel crea para el proyecto, usando el nombre del servicio como
+#     hostname (igual que en docker-compose.yml de desarrollo).
+#   - Las variables ${...} se completan en la pestaña "Environment" del
+#     servicio Compose en EasyPanel (no hay archivo .env en este repo).
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: lynkro
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: lynkro_outbound
+    volumes:
+      - lynkro_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U lynkro -d lynkro_outbound"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    volumes:
+      - lynkro_redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  api:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: postgresql://lynkro:${POSTGRES_PASSWORD}@postgres:5432/lynkro_outbound
+      DIRECT_URL: postgresql://lynkro:${POSTGRES_PASSWORD}@postgres:5432/lynkro_outbound
+      REDIS_URL: redis://redis:6379
+      JWT_SECRET: ${JWT_SECRET}
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY}
+      SESSION_COOKIE_NAME: lynkro_session
+      APP_BASE_URL: ${APP_BASE_URL}
+      API_BASE_URL: ${API_BASE_URL}
+      CORS_ALLOWED_ORIGINS: ${APP_BASE_URL}
+      TWILIO_WEBHOOK_BASE_URL: ${API_BASE_URL}
+      TWILIO_ACCOUNT_SID: ${TWILIO_ACCOUNT_SID:-}
+      TWILIO_AUTH_TOKEN: ${TWILIO_AUTH_TOKEN:-}
+      TWILIO_DEFAULT_FROM_NUMBER: ${TWILIO_DEFAULT_FROM_NUMBER:-}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      OPENAI_REALTIME_MODEL: ${OPENAI_REALTIME_MODEL:-gpt-4o-realtime-preview}
+      GHL_BASE_URL: ${GHL_BASE_URL:-https://services.leadconnectorhq.com}
+      GHL_CLIENT_ID: ${GHL_CLIENT_ID:-}
+      GHL_CLIENT_SECRET: ${GHL_CLIENT_SECRET:-}
+      GHL_SHARED_SECRET: ${GHL_SHARED_SECRET:-}
+      SIMULATION_MODE: ${SIMULATION_MODE:-false}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  worker:
+    build:
+      context: .
+      dockerfile: apps/worker/Dockerfile
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: postgresql://lynkro:${POSTGRES_PASSWORD}@postgres:5432/lynkro_outbound
+      DIRECT_URL: postgresql://lynkro:${POSTGRES_PASSWORD}@postgres:5432/lynkro_outbound
+      REDIS_URL: redis://redis:6379
+      JWT_SECRET: ${JWT_SECRET}
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY}
+      APP_BASE_URL: ${APP_BASE_URL}
+      API_BASE_URL: ${API_BASE_URL}
+      TWILIO_ACCOUNT_SID: ${TWILIO_ACCOUNT_SID:-}
+      TWILIO_AUTH_TOKEN: ${TWILIO_AUTH_TOKEN:-}
+      TWILIO_DEFAULT_FROM_NUMBER: ${TWILIO_DEFAULT_FROM_NUMBER:-}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      OPENAI_REALTIME_MODEL: ${OPENAI_REALTIME_MODEL:-gpt-4o-realtime-preview}
+      GHL_BASE_URL: ${GHL_BASE_URL:-https://services.leadconnectorhq.com}
+      GHL_CLIENT_ID: ${GHL_CLIENT_ID:-}
+      GHL_CLIENT_SECRET: ${GHL_CLIENT_SECRET:-}
+      GHL_SHARED_SECRET: ${GHL_SHARED_SECRET:-}
+      SIMULATION_MODE: ${SIMULATION_MODE:-false}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  web:
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+      args:
+        NEXT_PUBLIC_API_BASE_URL: ${API_BASE_URL}
+    restart: unless-stopped
+    environment:
+      NEXT_PUBLIC_API_BASE_URL: ${API_BASE_URL}
+    depends_on:
+      - api
+
+volumes:
+  lynkro_postgres_data:
+  lynkro_redis_data:
