@@ -1,0 +1,24 @@
+# dependencies
+node_modules/
+scripts/node_modules/
+
+# OS / editor
+.DS_Store
+*.swp
+.idea/
+.vscode/
+
+# logs / tmp
+*.log
+.tmp/
+tmp/
+
+# claude-seo-ai fixer backups (runtime, never committed)
+backups/
+
+# claude-seo-ai run artifacts (persisted audits) and comparisons — runtime data, never committed
+runs/
+compare/
+
+# ...but `compare/` above also matches the compare command's own skill directory. Keep it tracked.
+!skills/compare/
