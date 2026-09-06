@@ -23,7 +23,7 @@ registry upload.
 
 ```
 /plugin marketplace add viptechconsulting/skills
-/plugin install claude-seo-ai@claude-seo-ai
+/plugin install claude-seo-ai@viptechconsulting
 /reload-plugins
 ```
 

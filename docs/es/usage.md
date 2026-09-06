@@ -9,7 +9,7 @@ los informes que persiste y aplicar correcciones de forma segura en la plataform
 
 ```
 /plugin marketplace add viptechconsulting/skills
-/plugin install claude-seo-ai@claude-seo-ai
+/plugin install claude-seo-ai@viptechconsulting
 /reload-plugins
 ```
 

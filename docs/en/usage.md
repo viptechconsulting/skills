@@ -9,7 +9,7 @@ reports it persists, and applying fixes safely on whatever platform your site ru
 
 ```
 /plugin marketplace add viptechconsulting/skills
-/plugin install claude-seo-ai@claude-seo-ai
+/plugin install claude-seo-ai@viptechconsulting
 /reload-plugins
 ```
 

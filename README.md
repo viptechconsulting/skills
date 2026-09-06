@@ -37,7 +37,7 @@ It is original work — *inspired by* the patterns of community SEO tooling but 
 
 ```text
 /plugin marketplace add viptechconsulting/skills
-/plugin install claude-seo-ai@claude-seo-ai
+/plugin install claude-seo-ai@viptechconsulting
 /reload-plugins
 ```
 
@@ -288,7 +288,7 @@ Built by **Enrique Rocha** — I help teams ship AI: consulting, automations, an
 
 `claude-seo-ai` es la herramienta open-source de **SEO + búsqueda con IA** para Claude Code. Audita cualquier sitio en **dos puntajes independientes** — **Search SEO** clásico y **Visibilidad en IA (GEO/AEO)** — con hallazgos reproducibles, y opcionalmente **aplica** las correcciones seguras por ti (meta tags, JSON-LD, robots.txt para crawlers de IA, hreflang, sitemaps…), siempre con confirmación previa.
 
-- **Instalar:** `/plugin marketplace add viptechconsulting/skills` → `/plugin install claude-seo-ai@claude-seo-ai`. Multiagente: `npx skills add viptechconsulting/skills` (solo las skills en Markdown; la capa `scripts/` va en el canal de plugin).
+- **Instalar:** `/plugin marketplace add viptechconsulting/skills` → `/plugin install claude-seo-ai@viptechconsulting`. Multiagente: `npx skills add viptechconsulting/skills` (solo las skills en Markdown; la capa `scripts/` va en el canal de plugin).
 - **Usar:** `/claude-seo-ai:audit <url>` · `:geo` · `:score` · `:compare` · `:fix`. Los cuatro primeros son de solo lectura; `fix` previsualiza todo y escribe solo tras tu confirmación cambio por cambio.
 - **Cada auditoría se persiste** en `${CLAUDE_PLUGIN_DATA}/runs/<host>/<run-id>/`, así que `score`, `compare` y `fix` trabajan sobre un informe en disco, no sobre «la última auditoría de esta sesión».
 - **Funciona en cualquier sitio:** un detector de cuatro capas (plataforma · framework · plugins · hosting) enruta cada corrección al adaptador dueño de esa superficie — Shopify, WordPress, Webflow, Wix, Ghost, HubSpot, BigCommerce, árboles de código o `instructions`. **Nada se publica en vivo por defecto.**

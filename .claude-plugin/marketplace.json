@@ -1,11 +1,11 @@
 {
   "$schema": "https://json.schemastore.org/claude-code-plugin-marketplace.json",
-  "name": "claude-seo-ai",
+  "name": "viptechconsulting",
   "owner": {
     "name": "VIP Tech Consulting",
     "email": "info@viptechconsulting.com"
   },
-  "description": "SEO + AI-search (GEO/AEO) optimization suite for Claude Code.",
+  "description": "VIP Tech Consulting's internal Claude Code plugins: SEO/AI-search auditing and paid-ads auditing.",
   "plugins": [
     {
       "name": "claude-seo-ai",
@@ -21,6 +21,22 @@
         "ai-search",
         "schema",
         "core-web-vitals"
+      ]
+    },
+    {
+      "name": "claude-ads",
+      "source": "./claude-ads/",
+      "description": "Free-first paid advertising audit and AI creative generation, focused on Meta, Google, and TikTok. Guided first-run wizard (/ads start) + continuous coach (/ads next), ~158 weighted checks, parallel agents, industry templates, PPC math, A/B test design and PDF reports.",
+      "version": "2.4.0",
+      "license": "MIT",
+      "category": "marketing",
+      "keywords": [
+        "advertising-audit",
+        "google-ads",
+        "meta-ads",
+        "tiktok-ads",
+        "ppc",
+        "paid-advertising"
       ]
     }
   ]
