@@ -5,7 +5,7 @@
     "name": "VIP Tech Consulting",
     "email": "info@viptechconsulting.com"
   },
-  "description": "VIP Tech Consulting's internal Claude Code plugins: SEO/AI-search auditing and paid-ads auditing.",
+  "description": "VIP Tech Consulting's internal Claude Code plugins: SEO/AI-search auditing, paid-ads auditing and Instagram content tooling.",
   "plugins": [
     {
       "name": "claude-seo-ai",
@@ -37,6 +37,34 @@
         "tiktok-ads",
         "ppc",
         "paid-advertising"
+      ]
+    },
+    {
+      "name": "instagram-agent",
+      "source": "./instagram-agent/",
+      "description": "Thirteen Claude skills that run an Instagram account (hooks, captions, carousels, stories, profile score, DMs, humanizer). Verbatim copy of Jakeschincariol/instagram-agent-skill (MIT).",
+      "version": "1.0.0",
+      "license": "MIT",
+      "category": "marketing",
+      "keywords": [
+        "instagram",
+        "reels",
+        "content",
+        "humanizer"
+      ]
+    },
+    {
+      "name": "instagram-agent-es",
+      "source": "./instagram-agent-es/",
+      "description": "Herramientas locales en español para Reels y captions de Instagram: puntaje de hooks, hoja de beats, revisión de captions y humanizador. Port de instagram-agent-skill (MIT).",
+      "version": "0.1.0",
+      "license": "MIT",
+      "category": "marketing",
+      "keywords": [
+        "instagram",
+        "reels",
+        "español",
+        "humanizador"
       ]
     }
   ]
