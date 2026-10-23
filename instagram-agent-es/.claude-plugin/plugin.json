@@ -1,0 +1,9 @@
+{
+  "name": "instagram-agent-es",
+  "description": "Herramientas locales para Reels y captions de Instagram en español: puntaje de hooks, hoja de beats con tiempos, revisión de captions con vista previa del corte del feed y humanizador con léxico en español. Port de instagram-agent-skill (MIT).",
+  "version": "0.1.0",
+  "author": { "name": "VIP Tech Consulting", "url": "https://viptechconsulting.com" },
+  "repository": "https://github.com/viptechconsulting/skills",
+  "license": "MIT",
+  "keywords": ["instagram", "reels", "español", "contenido", "humanizador", "captions"]
+}
