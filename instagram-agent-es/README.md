@@ -10,7 +10,7 @@ Cinco herramientas locales para escribir Reels y captions de Instagram **en espa
 | `humanize_es.py` | Quita caracteres invisibles, tipografía de IA y frases de relleno en español; **marca** las estructuras sin reescribirlas. |
 | `detect_es.py` | Panel de 5 chequeos para comparar un borrador antes/después. Heurística local, no un detector real. |
 
-Uso y flujo: [`skills/ig-herramientas-es/SKILL.md`](skills/ig-herramientas-es/SKILL.md). Pruebas: `python3 -I tests/test_es.py`.
+Uso y flujo: [`skills/ig-herramientas-es/SKILL.md`](skills/ig-herramientas-es/SKILL.md) (las herramientas) y [`skills/ig-reel-es/SKILL.md`](skills/ig-reel-es/SKILL.md) (pídele un Reel completo; orquesta todo). Pruebas: `python3 -I tests/test_es.py`.
 
 ## Qué se cambió respecto al original
 
