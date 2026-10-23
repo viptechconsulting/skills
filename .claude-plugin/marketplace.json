@@ -56,8 +56,8 @@
     {
       "name": "instagram-agent-es",
       "source": "./instagram-agent-es/",
-      "description": "Herramientas locales en español para Reels y captions de Instagram: puntaje de hooks, hoja de beats, revisión de captions y humanizador. Port de instagram-agent-skill (MIT).",
-      "version": "0.1.0",
+      "description": "Herramientas locales en español para Reels y captions de Instagram: puntaje de hooks, hoja de beats, revisión de captions y humanizador. Port de instagram-agent-skill (MIT). Incluye /ig-reel-es: un Reel completo (hooks puntuados, guion, beats, pantalla, caption).",
+      "version": "0.2.0",
       "license": "MIT",
       "category": "marketing",
       "keywords": [
