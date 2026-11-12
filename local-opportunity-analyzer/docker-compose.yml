@@ -1,0 +1,27 @@
+# Uso: ADMIN_EMAIL=tu@correo.com ADMIN_PASSWORD='Clave-Segura-123' docker compose up --build
+# Abre http://localhost:3000  (solo local; para internet use HTTPS y COOKIE_SECURE=1)
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: lopp
+      POSTGRES_PASSWORD: lopp-local
+      POSTGRES_DB: lopp
+    volumes: ["pgdata:/var/lib/postgresql/data"]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U lopp"]
+      interval: 3s
+      retries: 20
+  app:
+    build: .
+    depends_on:
+      db: { condition: service_healthy }
+    ports: ["3000:3000"]
+    environment:
+      DATABASE_URL: postgres://lopp:lopp-local@db:5432/lopp
+      ADMIN_EMAIL: ${ADMIN_EMAIL:?defina ADMIN_EMAIL}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:?defina ADMIN_PASSWORD}
+      GOOGLE_PLACES_API_KEY: ${GOOGLE_PLACES_API_KEY:-}
+      PAGESPEED_API_KEY: ${PAGESPEED_API_KEY:-}
+volumes:
+  pgdata:
