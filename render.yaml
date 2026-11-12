@@ -1,0 +1,28 @@
+# Blueprint de Render para VIP Tech Local Opportunity Analyzer.
+# Render → New → Blueprint → seleccione este repo y el branch. Pedirá ADMIN_EMAIL y ADMIN_PASSWORD.
+services:
+  - type: web
+    name: vip-local-opportunity-analyzer
+    runtime: node
+    rootDir: local-opportunity-analyzer
+    buildCommand: npm ci
+    startCommand: npm start
+    healthCheckPath: /api/me
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: vip-lopp-db
+          property: connectionString
+      - key: COOKIE_SECURE
+        value: "1"
+      - key: NODE_VERSION
+        value: "22"
+      - key: ADMIN_EMAIL
+        sync: false
+      - key: ADMIN_PASSWORD
+        sync: false
+      - key: ADMIN_NAME
+        value: Administrador
+databases:
+  - name: vip-lopp-db
+    plan: basic-256mb
